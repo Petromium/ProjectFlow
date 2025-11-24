@@ -15,8 +15,11 @@ import {
   updateStakeholderSchema,
   updateRiskSchema,
   updateIssueSchema,
-  updateCostItemSchema
+  updateCostItemSchema,
+  insertAiConversationSchema
 } from "@shared/schema";
+import { chatWithAssistant, type ChatMessage } from "./aiAssistant";
+import { z } from "zod";
 
 // Helper to get user ID from request
 function getUserId(req: any): string {
@@ -662,6 +665,192 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating cost item:", error);
       res.status(400).json({ message: "Failed to update cost item" });
+    }
+  });
+
+  // ===== AI Assistant Routes =====
+  
+  // Get user's conversations
+  app.get('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const conversations = await storage.getAiConversationsByUser(userId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
+  });
+
+  // Get conversations for a project
+  app.get('/api/ai/conversations/project/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const conversations = await storage.getAiConversationsByProject(projectId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching project conversations:", error);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
+  });
+
+  // Create new conversation
+  app.post('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const data = insertAiConversationSchema.parse(req.body);
+      
+      // Verify project access if projectId is provided
+      if (data.projectId) {
+        if (!await checkProjectAccess(userId, data.projectId)) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+      
+      const conversation = await storage.createAiConversation({
+        ...data,
+        userId
+      });
+      
+      res.json(conversation);
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      res.status(400).json({ message: "Failed to create conversation" });
+    }
+  });
+
+  // Get conversation messages
+  app.get('/api/ai/conversations/:id/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const conversationId = parseInt(req.params.id);
+      
+      // Check conversation ownership
+      const conversation = await storage.getAiConversation(conversationId);
+      if (!conversation || conversation.userId !== userId) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      const messages = await storage.getAiMessagesByConversation(conversationId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Send message and get AI response
+  const chatMessageSchema = z.object({
+    conversationId: z.number(),
+    message: z.string(),
+  });
+
+  app.post('/api/ai/chat', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { conversationId, message } = chatMessageSchema.parse(req.body);
+      
+      // Check conversation ownership
+      const conversation = await storage.getAiConversation(conversationId);
+      if (!conversation || conversation.userId !== userId) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      // Get conversation history
+      const history = await storage.getAiMessagesByConversation(conversationId);
+      const messages: ChatMessage[] = history.map(h => ({
+        role: h.role as "user" | "assistant" | "system",
+        content: h.content
+      }));
+      
+      // Add new user message
+      messages.push({ role: "user", content: message });
+      
+      // Save user message
+      await storage.createAiMessage({
+        conversationId,
+        role: "user",
+        content: message,
+        tokensUsed: 0
+      });
+      
+      // Get AI response
+      const response = await chatWithAssistant(
+        messages,
+        conversation.projectId,
+        storage,
+        userId
+      );
+      
+      // Validate response before saving
+      // Require either a meaningful message OR function calls were executed
+      const hasMessage = response.message && response.message.trim().length > 0 && response.message !== "No response generated";
+      const hasFunctionCalls = response.functionCalls && response.functionCalls.length > 0;
+      
+      if (!hasMessage && !hasFunctionCalls) {
+        throw new Error("AI response was empty - no message or function calls");
+      }
+      
+      // Save assistant message only if there's meaningful content
+      // If only function calls without message, use a default message
+      const messageContent = hasMessage ? response.message : 
+        (hasFunctionCalls ? `Executed ${response.functionCalls!.length} function(s)` : response.message);
+      
+      await storage.createAiMessage({
+        conversationId,
+        role: "assistant",
+        content: messageContent,
+        tokensUsed: response.tokensUsed,
+        functionCall: response.functionCalls ? JSON.stringify(response.functionCalls) : null
+      });
+      
+      // Track usage
+      await storage.createAiUsage({
+        userId,
+        organizationId: conversation.projectId ? (await storage.getProject(conversation.projectId))?.organizationId || null : null,
+        tokensUsed: response.tokensUsed,
+        model: "gpt-5",
+        operation: "chat"
+      });
+      
+      // Update conversation updated time (title if not set)
+      await storage.updateAiConversation(conversationId, {
+        title: conversation.title || message.substring(0, 50)
+      });
+      
+      res.json({
+        message: response.message,
+        tokensUsed: response.tokensUsed,
+        functionCalls: response.functionCalls
+      });
+    } catch (error: any) {
+      console.error("Error in AI chat:", error);
+      res.status(500).json({ message: error.message || "Failed to get AI response" });
+    }
+  });
+
+  // Delete conversation
+  app.delete('/api/ai/conversations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const conversation = await storage.getAiConversation(id);
+      if (!conversation || conversation.userId !== userId) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      await storage.deleteAiConversation(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      res.status(500).json({ message: "Failed to delete conversation" });
     }
   });
 

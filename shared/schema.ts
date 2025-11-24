@@ -230,6 +230,38 @@ export const googleConnections = pgTable("google_connections", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// AI Conversations
+export const aiConversations = pgTable("ai_conversations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  title: text("title"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// AI Messages
+export const aiMessages = pgTable("ai_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // user, assistant, system
+  content: text("content").notNull(),
+  functionCall: text("function_call"), // JSON string of function call if any
+  tokensUsed: integer("tokens_used").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// AI Usage Tracking
+export const aiUsage = pgTable("ai_usage", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: integer("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+  tokensUsed: integer("tokens_used").notNull(),
+  model: text("model").notNull(),
+  operation: text("operation").notNull(), // chat, analysis, report-generation, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Zod Schemas for Organizations
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true, updatedAt: true });
 export const selectOrganizationSchema = createSelectSchema(organizations);
@@ -332,3 +364,21 @@ export const insertGoogleConnectionSchema = createInsertSchema(googleConnections
 export const selectGoogleConnectionSchema = createSelectSchema(googleConnections);
 export type InsertGoogleConnection = z.infer<typeof insertGoogleConnectionSchema>;
 export type GoogleConnection = typeof googleConnections.$inferSelect;
+
+// Zod Schemas for AI Conversations
+export const insertAiConversationSchema = createInsertSchema(aiConversations).omit({ id: true, createdAt: true, updatedAt: true });
+export const selectAiConversationSchema = createSelectSchema(aiConversations);
+export type InsertAiConversation = z.infer<typeof insertAiConversationSchema>;
+export type AiConversation = typeof aiConversations.$inferSelect;
+
+// Zod Schemas for AI Messages
+export const insertAiMessageSchema = createInsertSchema(aiMessages).omit({ id: true, createdAt: true });
+export const selectAiMessageSchema = createSelectSchema(aiMessages);
+export type InsertAiMessage = z.infer<typeof insertAiMessageSchema>;
+export type AiMessage = typeof aiMessages.$inferSelect;
+
+// Zod Schemas for AI Usage
+export const insertAiUsageSchema = createInsertSchema(aiUsage).omit({ id: true, createdAt: true });
+export const selectAiUsageSchema = createSelectSchema(aiUsage);
+export type InsertAiUsage = z.infer<typeof insertAiUsageSchema>;
+export type AiUsage = typeof aiUsage.$inferSelect;

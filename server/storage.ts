@@ -32,6 +32,12 @@ import type {
   ResourceAssignment,
   InsertGoogleConnection,
   GoogleConnection,
+  InsertAiConversation,
+  AiConversation,
+  InsertAiMessage,
+  AiMessage,
+  InsertAiUsage,
+  AiUsage,
 } from "@shared/schema";
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -134,6 +140,22 @@ export interface IStorage {
   createGoogleConnection(connection: InsertGoogleConnection): Promise<GoogleConnection>;
   updateGoogleConnection(userId: string, connection: Partial<InsertGoogleConnection>): Promise<GoogleConnection | undefined>;
   deleteGoogleConnection(userId: string): Promise<void>;
+
+  // AI Conversations
+  getAiConversation(id: number): Promise<AiConversation | undefined>;
+  getAiConversationsByUser(userId: string): Promise<AiConversation[]>;
+  getAiConversationsByProject(projectId: number): Promise<AiConversation[]>;
+  createAiConversation(conversation: InsertAiConversation): Promise<AiConversation>;
+  updateAiConversation(id: number, conversation: Partial<InsertAiConversation>): Promise<AiConversation | undefined>;
+  deleteAiConversation(id: number): Promise<void>;
+
+  // AI Messages
+  getAiMessagesByConversation(conversationId: number): Promise<AiMessage[]>;
+  createAiMessage(message: InsertAiMessage): Promise<AiMessage>;
+
+  // AI Usage
+  createAiUsage(usage: InsertAiUsage): Promise<AiUsage>;
+  getAiUsageByUser(userId: string, startDate?: Date): Promise<AiUsage[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -565,6 +587,74 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGoogleConnection(userId: string): Promise<void> {
     await db.delete(schema.googleConnections).where(eq(schema.googleConnections.userId, userId));
+  }
+
+  // AI Conversations
+  async getAiConversation(id: number): Promise<AiConversation | undefined> {
+    const [conversation] = await db.select().from(schema.aiConversations)
+      .where(eq(schema.aiConversations.id, id));
+    return conversation;
+  }
+
+  async getAiConversationsByUser(userId: string): Promise<AiConversation[]> {
+    return await db.select().from(schema.aiConversations)
+      .where(eq(schema.aiConversations.userId, userId))
+      .orderBy(desc(schema.aiConversations.updatedAt));
+  }
+
+  async getAiConversationsByProject(projectId: number): Promise<AiConversation[]> {
+    return await db.select().from(schema.aiConversations)
+      .where(eq(schema.aiConversations.projectId, projectId))
+      .orderBy(desc(schema.aiConversations.updatedAt));
+  }
+
+  async createAiConversation(conversation: InsertAiConversation): Promise<AiConversation> {
+    const [created] = await db.insert(schema.aiConversations).values(conversation).returning();
+    return created;
+  }
+
+  async updateAiConversation(id: number, conversation: Partial<InsertAiConversation>): Promise<AiConversation | undefined> {
+    const [updated] = await db.update(schema.aiConversations)
+      .set({ ...conversation, updatedAt: new Date() })
+      .where(eq(schema.aiConversations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAiConversation(id: number): Promise<void> {
+    await db.delete(schema.aiConversations).where(eq(schema.aiConversations.id, id));
+  }
+
+  // AI Messages
+  async getAiMessagesByConversation(conversationId: number): Promise<AiMessage[]> {
+    return await db.select().from(schema.aiMessages)
+      .where(eq(schema.aiMessages.conversationId, conversationId))
+      .orderBy(asc(schema.aiMessages.createdAt));
+  }
+
+  async createAiMessage(message: InsertAiMessage): Promise<AiMessage> {
+    const [created] = await db.insert(schema.aiMessages).values(message).returning();
+    return created;
+  }
+
+  // AI Usage
+  async createAiUsage(usage: InsertAiUsage): Promise<AiUsage> {
+    const [created] = await db.insert(schema.aiUsage).values(usage).returning();
+    return created;
+  }
+
+  async getAiUsageByUser(userId: string, startDate?: Date): Promise<AiUsage[]> {
+    if (startDate) {
+      return await db.select().from(schema.aiUsage)
+        .where(and(
+          eq(schema.aiUsage.userId, userId),
+          eq(schema.aiUsage.createdAt, startDate)
+        ))
+        .orderBy(desc(schema.aiUsage.createdAt));
+    }
+    return await db.select().from(schema.aiUsage)
+      .where(eq(schema.aiUsage.userId, userId))
+      .orderBy(desc(schema.aiUsage.createdAt));
   }
 }
 

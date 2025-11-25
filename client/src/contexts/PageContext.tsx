@@ -37,6 +37,7 @@ export interface PageContextType {
   showRiskSnapshot: boolean;
   showCostSnapshot: boolean;
   showWBSLinkage: boolean;
+  showAIAssistantGuide: boolean;
 }
 
 const PageContext = createContext<PageContextType | undefined>(undefined);
@@ -111,6 +112,7 @@ export function PageProvider({ children }: { children: React.ReactNode }) {
     showRiskSnapshot: ["dashboard", "risks", "issues"].includes(currentPage),
     showCostSnapshot: ["dashboard", "cost", "analytics"].includes(currentPage),
     showWBSLinkage: ["wbs", "gantt", "kanban", "risks", "issues", "stakeholders"].includes(currentPage),
+    showAIAssistantGuide: currentPage === "ai-assistant",
   };
 
   return (

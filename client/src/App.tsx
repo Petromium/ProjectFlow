@@ -11,6 +11,7 @@ import { ContextAwareRightRail } from "@/components/widgets/ContextAwareRightRai
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { PageProvider } from "@/contexts/PageContext";
+import { AIPromptProvider } from "@/contexts/AIPromptContext";
 import { useAuth } from "@/hooks/useAuth";
 import { initGA } from "@/lib/analytics";
 import { useAnalytics } from "@/hooks/use-analytics";
@@ -95,23 +96,25 @@ function AuthenticatedApp() {
   return (
     <ProjectProvider>
       <PageProvider>
-        <SidebarProvider style={sidebarStyle} defaultOpen={false}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-              <TopBar />
-              <div className="flex flex-1 overflow-hidden">
-                <main className="flex-1 overflow-y-auto bg-background">
-                  <Router />
-                </main>
-                <div className="hidden lg:block">
-                  <ContextAwareRightRail />
+        <AIPromptProvider>
+          <SidebarProvider style={sidebarStyle} defaultOpen={false}>
+            <div className="flex h-screen w-full">
+              <AppSidebar />
+              <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+                <TopBar />
+                <div className="flex flex-1 overflow-hidden">
+                  <main className="flex-1 overflow-y-auto bg-background">
+                    <Router />
+                  </main>
+                  <div className="hidden lg:block">
+                    <ContextAwareRightRail />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </SidebarProvider>
-        <Toaster />
+          </SidebarProvider>
+          <Toaster />
+        </AIPromptProvider>
       </PageProvider>
     </ProjectProvider>
   );

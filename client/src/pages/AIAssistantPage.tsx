@@ -21,14 +21,15 @@ import {
 } from "@/components/ui/dialog";
 import type { AiConversation, AiMessage } from "@shared/schema";
 import { Card } from "@/components/ui/card";
-import { AIHelpPanel } from "@/components/ai/AIHelpPanel";
 import { AISettingsModal, getAISettings, type AISettings } from "@/components/ai/AISettingsModal";
+import { useAIPrompt } from "@/contexts/AIPromptContext";
 import { AIFileAttachment, type AttachmentFile, prepareAttachmentsForMessage } from "@/components/ai/AIFileAttachment";
 import { AIMentionInput } from "@/components/ai/AIMentionInput";
 
 export default function AIAssistantPage() {
   const { selectedProjectId, selectedProject } = useProject();
   const { toast } = useToast();
+  const { pendingPrompt, clearPendingPrompt } = useAIPrompt();
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -42,6 +43,13 @@ export default function AIAssistantPage() {
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevProjectIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (pendingPrompt) {
+      setMessageInput(pendingPrompt);
+      clearPendingPrompt();
+    }
+  }, [pendingPrompt, clearPendingPrompt]);
 
   // Clear selected conversation and purge cache when project changes
   useEffect(() => {
@@ -543,13 +551,6 @@ export default function AIAssistantPage() {
           </>
         )}
       </Card>
-
-      {/* Help Panel */}
-      <AIHelpPanel 
-        onExampleClick={(example) => {
-          setMessageInput(example);
-        }}
-      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

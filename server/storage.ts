@@ -67,12 +67,15 @@ export interface IStorage {
   getOrganization(id: number): Promise<Organization | undefined>;
   getOrganizationBySlug(slug: string): Promise<Organization | undefined>;
   getOrganizationsByUser(userId: string): Promise<Organization[]>;
+  getAllOrganizations(): Promise<Organization[]>;
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: number, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
 
   // Users (Replit Auth compatible)
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUsersByOrganization(organizationId: number): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
@@ -254,6 +257,10 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(schema.organizations.id, orgIds));
   }
 
+  async getAllOrganizations(): Promise<Organization[]> {
+    return await db.select().from(schema.organizations);
+  }
+
   async createOrganization(org: InsertOrganization): Promise<Organization> {
     const [created] = await db.insert(schema.organizations).values(org).returning();
     return created;
@@ -276,6 +283,21 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(schema.users);
+  }
+
+  async getUsersByOrganization(organizationId: number): Promise<User[]> {
+    const userOrgs = await db.select().from(schema.userOrganizations)
+      .where(eq(schema.userOrganizations.organizationId, organizationId));
+    
+    const userIds = userOrgs.map(uo => uo.userId);
+    if (userIds.length === 0) return [];
+
+    return await db.select().from(schema.users)
+      .where(inArray(schema.users.id, userIds));
   }
 
   async createUser(user: InsertUser): Promise<User> {

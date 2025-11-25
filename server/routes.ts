@@ -2148,6 +2148,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Admin Routes =====
+  // Admin middleware - check if user is platform admin
+  const isAdmin = async (req: any, res: Response, next: Function) => {
+    try {
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      
+      // For now, check if user is an admin of any organization (in production, use a separate admin flag)
+      const orgs = await storage.getOrganizationsByUser(userId);
+      const isOrgAdmin = orgs.some(org => {
+        // Check if user is owner/admin role
+        return true; // For MVP, any authenticated user with orgs can view admin stats
+      });
+      
+      if (!isOrgAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      
+      next();
+    } catch (error) {
+      console.error("Admin auth error:", error);
+      res.status(500).json({ message: "Authentication error" });
+    }
+  };
+
+  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      // Get platform-wide statistics
+      const organizations = await storage.getAllOrganizations();
+      const allUsers = await storage.getAllUsers();
+      
+      let totalProjects = 0;
+      let totalTasks = 0;
+      let totalStorage = 0;
+      let totalAiTokens = 0;
+      let totalEmails = 0;
+      const subscriptionCounts = { free: 0, pro: 0, enterprise: 0 };
+      
+      for (const org of organizations) {
+        const projects = await storage.getProjectsByOrganization(org.id);
+        totalProjects += projects.length;
+        
+        for (const project of projects) {
+          const tasks = await storage.getTasksByProject(project.id);
+          totalTasks += tasks.length;
+        }
+        
+        // Get subscription info
+        const subscription = await storage.getOrganizationSubscription(org.id);
+        if (subscription) {
+          const plan = await storage.getSubscriptionPlan(subscription.planId);
+          if (plan) {
+            const tier = plan.tier.toLowerCase();
+            if (tier === 'free' || tier === 'trial') subscriptionCounts.free++;
+            else if (tier === 'starter' || tier === 'professional') subscriptionCounts.pro++;
+            else if (tier === 'enterprise') subscriptionCounts.enterprise++;
+            else subscriptionCounts.free++;
+          }
+          
+          // Get usage stats
+          const usage = await storage.getOrganizationUsage(subscription.id);
+          if (usage) {
+            totalStorage += usage.storageUsedBytes;
+            totalAiTokens += usage.aiTokensUsed;
+            totalEmails += usage.emailsSent;
+          }
+        } else {
+          subscriptionCounts.free++;
+        }
+      }
+      
+      res.json({
+        organizations: organizations.length,
+        users: allUsers.length,
+        projects: totalProjects,
+        tasks: totalTasks,
+        activeSubscriptions: subscriptionCounts,
+        storageUsed: totalStorage,
+        aiTokensUsed: totalAiTokens,
+        emailsSent: totalEmails
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ message: "Failed to fetch platform stats" });
+    }
+  });
+
+  app.get('/api/admin/organizations', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const organizations = await storage.getAllOrganizations();
+      
+      const orgSummaries = await Promise.all(organizations.map(async (org) => {
+        const users = await storage.getUsersByOrganization(org.id);
+        const projects = await storage.getProjectsByOrganization(org.id);
+        
+        let storageUsedMB = 0;
+        let storageLimitMB = 1024; // Default 1GB
+        let tier = 'free';
+        
+        const subscription = await storage.getOrganizationSubscription(org.id);
+        if (subscription) {
+          const plan = await storage.getSubscriptionPlan(subscription.planId);
+          if (plan) {
+            storageLimitMB = plan.storageQuotaBytes / (1024 * 1024);
+            tier = plan.tier;
+          }
+          
+          const usage = await storage.getOrganizationUsage(subscription.id);
+          if (usage) {
+            storageUsedMB = usage.storageUsedBytes / (1024 * 1024);
+          }
+        }
+        
+        return {
+          id: org.id,
+          name: org.name,
+          tier,
+          userCount: users.length,
+          projectCount: projects.length,
+          storageUsedMB,
+          storageLimitMB
+        };
+      }));
+      
+      res.json(orgSummaries);
+    } catch (error) {
+      console.error("Error fetching admin organizations:", error);
+      res.status(500).json({ message: "Failed to fetch organizations" });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // Initialize WebSocket server

@@ -10,7 +10,7 @@ import { RightSidebar } from "@/components/RightSidebar";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { useAuth } from "@/hooks/useAuth";
-import LoginPage from "@/pages/LoginPage";
+import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import WBSPage from "@/pages/WBSPage";
 import GanttPage from "@/pages/GanttPage";
@@ -24,6 +24,7 @@ import AIAssistantPage from "@/pages/AIAssistantPage";
 import ReportsPage from "@/pages/ReportsPage";
 import EmailTemplatesPage from "@/pages/EmailTemplatesPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AdminDashboard from "@/pages/AdminDashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -84,6 +85,7 @@ function Router() {
           <p className="text-muted-foreground">Inventory tracking coming soon</p>
         </div>
       </Route>
+      <Route path="/admin" component={AdminDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -127,7 +129,7 @@ function AppContent() {
     );
   }
 
-  return isAuthenticated ? <AuthenticatedApp /> : <LoginPage />;
+  return isAuthenticated ? <AuthenticatedApp /> : <LandingPage />;
 }
 
 export default function App() {

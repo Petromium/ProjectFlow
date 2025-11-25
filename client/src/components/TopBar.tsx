@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { Search, Plus, Download, Upload, Bell, Moon, Sun, User, X, Building2, FolderKanban } from "lucide-react";
+import { useLocation } from "wouter";
+import { Search, Plus, Download, Upload, Bell, Moon, Sun, User, X, Building2, FolderKanban, Settings, LogOut, Mail, Shield, CheckCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -26,19 +27,62 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success';
+  time: string;
+  read: boolean;
+}
+
 export function TopBar() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [notifications, setNotifications] = useState<Notification[]>([
+    { id: 1, title: "Task Assigned", message: "You've been assigned to 'Site Preparation'", type: "info", time: "2 hours ago", read: false },
+    { id: 2, title: "Risk Alert", message: "High risk 'Weather Delays' requires attention", type: "warning", time: "5 hours ago", read: false },
+    { id: 3, title: "Issue Resolved", message: "Issue 'Permit Delay' has been closed", type: "success", time: "1 day ago", read: false },
+  ]);
+  
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const markAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    toast({ title: "Notifications marked as read" });
+  };
+  
+  const markAsRead = (id: number) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
   const {
     organizations,
     projects,
@@ -403,32 +447,144 @@ export function TopBar() {
           {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </Button>
 
-        <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-          <Bell className="h-4 w-4" />
-          <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs" data-testid="badge-notification-count">
-            3
-          </Badge>
-        </Button>
+        <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs" data-testid="badge-notification-count">
+                  {unreadCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <div className="flex items-center justify-between p-3 border-b">
+              <h4 className="font-semibold text-sm">Notifications</h4>
+              {unreadCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={markAllRead} className="h-auto py-1 px-2 text-xs" data-testid="button-mark-all-read">
+                  <CheckCheck className="h-3 w-3 mr-1" />
+                  Mark all read
+                </Button>
+              )}
+            </div>
+            <ScrollArea className="h-[300px]">
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground text-sm">
+                  No notifications
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`p-3 hover-elevate cursor-pointer ${!notification.read ? 'bg-muted/50' : ''}`}
+                      onClick={() => markAsRead(notification.id)}
+                      data-testid={`notification-item-${notification.id}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                          notification.type === 'warning' ? 'bg-amber-500' :
+                          notification.type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{notification.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{notification.message}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid="button-profile">
-              <User className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="relative" data-testid="button-profile">
+              <Avatar className="h-7 w-7">
+                <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || 'User'} />
+                <AvatarFallback className="text-xs">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
-              {user?.firstName} {user?.lastName}
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+              </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-item-profile">Profile</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-item-settings">Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setProfileOpen(true)} data-testid="menu-item-profile">
+              <User className="h-4 w-4 mr-2" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')} data-testid="menu-item-settings">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} data-testid="menu-item-logout">
+              <LogOut className="h-4 w-4 mr-2" />
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Profile</DialogTitle>
+              <DialogDescription>Your account information</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || 'User'} />
+                  <AvatarFallback className="text-xl">
+                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-semibold text-lg">{user?.firstName} {user?.lastName}</h3>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Mail className="h-3 w-3" />
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="border rounded-lg p-4 space-y-3">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Organizations
+                </h4>
+                <div className="space-y-2">
+                  {organizations.map(org => (
+                    <div key={org.id} className="flex items-center justify-between text-sm">
+                      <span>{org.name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Member
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setProfileOpen(false)} data-testid="button-close-profile">
+                  Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </header>
   );

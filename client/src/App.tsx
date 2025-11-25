@@ -28,6 +28,9 @@ import ReportsPage from "@/pages/ReportsPage";
 import EmailTemplatesPage from "@/pages/EmailTemplatesPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminDashboard from "@/pages/AdminDashboard";
+import ResourcesPage from "@/pages/ResourcesPage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
+import DocumentsPage from "@/pages/DocumentsPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -42,12 +45,7 @@ function Router() {
       <Route path="/kanban" component={KanbanPage} />
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/stakeholders" component={StakeholdersPage} />
-      <Route path="/resources">
-        <div className="p-6">
-          <h1 className="text-3xl font-semibold">Resources</h1>
-          <p className="text-muted-foreground">Resource management coming soon</p>
-        </div>
-      </Route>
+      <Route path="/resources" component={ResourcesPage} />
       <Route path="/risks" component={RisksPage} />
       <Route path="/issues" component={IssuesPage} />
       <Route path="/change-requests">
@@ -57,18 +55,8 @@ function Router() {
         </div>
       </Route>
       <Route path="/cost" component={CostPage} />
-      <Route path="/sop">
-        <div className="p-6">
-          <h1 className="text-3xl font-semibold">Standard Operating Procedures</h1>
-          <p className="text-muted-foreground">SOP documentation coming soon</p>
-        </div>
-      </Route>
-      <Route path="/analytics">
-        <div className="p-6">
-          <h1 className="text-3xl font-semibold">Analytics</h1>
-          <p className="text-muted-foreground">Advanced analytics coming soon</p>
-        </div>
-      </Route>
+      <Route path="/sop" component={DocumentsPage} />
+      <Route path="/analytics" component={AnalyticsPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route path="/email-templates" component={EmailTemplatesPage} />
       <Route path="/ai-assistant" component={AIAssistantPage} />

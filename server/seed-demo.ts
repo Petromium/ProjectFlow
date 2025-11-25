@@ -1166,97 +1166,328 @@ async function seedDemoProject() {
   // ============================================
   
   const resources = await db.insert(schema.resources).values([
+    // Project Management
     {
       projectId: project.id,
       name: "Project Director - Michael Chen",
       type: "human",
+      discipline: "general",
+      costPerHour: "175.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Project Manager - Sarah Johnson",
+      type: "human",
+      discipline: "general",
       costPerHour: "150.00",
       availability: 100,
     },
     {
       projectId: project.id,
-      name: "Solar Installation Crew A",
+      name: "Construction Manager - James Rodriguez",
       type: "human",
-      costPerHour: "65.00",
+      discipline: "civil",
+      costPerHour: "140.00",
       availability: 100,
     },
     {
       projectId: project.id,
-      name: "Solar Installation Crew B",
+      name: "HSE Manager - Lisa Wang",
       type: "human",
-      costPerHour: "65.00",
+      discipline: "general",
+      costPerHour: "125.00",
+      availability: 100,
+    },
+    // Engineering Team
+    {
+      projectId: project.id,
+      name: "Lead Electrical Engineer - David Kim",
+      type: "human",
+      discipline: "electrical",
+      costPerHour: "130.00",
       availability: 100,
     },
     {
       projectId: project.id,
-      name: "Electrical Team",
+      name: "Senior Mechanical Engineer - Ahmed Hassan",
       type: "human",
-      costPerHour: "85.00",
+      discipline: "mechanical",
+      costPerHour: "120.00",
       availability: 100,
     },
     {
       projectId: project.id,
-      name: "Civil Works Crew",
+      name: "Civil Engineer - Patricia Martinez",
       type: "human",
-      costPerHour: "55.00",
+      discipline: "civil",
+      costPerHour: "115.00",
       availability: 100,
     },
     {
       projectId: project.id,
-      name: "Crane (100-ton)",
-      type: "equipment",
-      costPerHour: "250.00",
+      name: "Instrumentation Engineer - Robert Chen",
+      type: "human",
+      discipline: "instrumentation",
+      costPerHour: "125.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "SCADA Specialist - Emily Taylor",
+      type: "human",
+      discipline: "instrumentation",
+      costPerHour: "135.00",
       availability: 80,
     },
+    // Construction Crews
     {
       projectId: project.id,
-      name: "Excavator Fleet",
-      type: "equipment",
-      costPerHour: "120.00",
+      name: "Solar Installation Crew A (8 workers)",
+      type: "human",
+      discipline: "electrical",
+      costPerHour: "520.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Solar Installation Crew B (8 workers)",
+      type: "human",
+      discipline: "electrical",
+      costPerHour: "520.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Electrical Installation Team (6 workers)",
+      type: "human",
+      discipline: "electrical",
+      costPerHour: "510.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Civil Works Crew (10 workers)",
+      type: "human",
+      discipline: "civil",
+      costPerHour: "550.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Structural Steel Team (6 workers)",
+      type: "human",
+      discipline: "structural",
+      costPerHour: "480.00",
       availability: 90,
     },
     {
       projectId: project.id,
-      name: "Cable Pulling Machine",
+      name: "Cable Pulling Team (4 workers)",
+      type: "human",
+      discipline: "electrical",
+      costPerHour: "320.00",
+      availability: 100,
+    },
+    // Equipment
+    {
+      projectId: project.id,
+      name: "Mobile Crane 100T - Liebherr LTM 1100",
       type: "equipment",
-      costPerHour: "80.00",
+      discipline: "civil",
+      costPerHour: "350.00",
+      availability: 80,
+    },
+    {
+      projectId: project.id,
+      name: "Excavator CAT 320D",
+      type: "equipment",
+      discipline: "civil",
+      costPerHour: "145.00",
+      availability: 90,
+    },
+    {
+      projectId: project.id,
+      name: "Excavator CAT 325D",
+      type: "equipment",
+      discipline: "civil",
+      costPerHour: "165.00",
+      availability: 85,
+    },
+    {
+      projectId: project.id,
+      name: "Bulldozer CAT D6",
+      type: "equipment",
+      discipline: "civil",
+      costPerHour: "185.00",
+      availability: 90,
+    },
+    {
+      projectId: project.id,
+      name: "Concrete Pump Truck",
+      type: "equipment",
+      discipline: "civil",
+      costPerHour: "275.00",
+      availability: 75,
+    },
+    {
+      projectId: project.id,
+      name: "Cable Pulling Machine - Greenlee 6001",
+      type: "equipment",
+      discipline: "electrical",
+      costPerHour: "95.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "Aerial Work Platform - JLG 860SJ",
+      type: "equipment",
+      discipline: "electrical",
+      costPerHour: "85.00",
+      availability: 95,
+    },
+    // Materials (bulk items tracked as resources)
+    {
+      projectId: project.id,
+      name: "Solar Panel Inventory (monocrystalline 400W)",
+      type: "material",
+      discipline: "electrical",
+      costPerHour: "0.00",
+      availability: 100,
+    },
+    {
+      projectId: project.id,
+      name: "DC Cable Stock (1000V rated)",
+      type: "material",
+      discipline: "electrical",
+      costPerHour: "0.00",
       availability: 100,
     },
   ]).returning();
 
   console.log("✓ Created resources");
 
-  // Resource Assignments (allocation percentage only)
+  // Resource Assignments - indices: 
+  // 0: Project Director, 1: Project Manager, 2: Construction Manager, 3: HSE Manager
+  // 4: Lead Electrical Engineer, 5: Senior Mechanical Engineer, 6: Civil Engineer
+  // 7: Instrumentation Engineer, 8: SCADA Specialist
+  // 9: Solar Crew A, 10: Solar Crew B, 11: Electrical Team, 12: Civil Crew
+  // 13: Structural Steel Team, 14: Cable Pulling Team
+  // 15: Crane, 16: Excavator 320D, 17: Excavator 325D, 18: Bulldozer
+  // 19: Concrete Pump, 20: Cable Puller, 21: Aerial Platform
+  // 22: Solar Panel Inventory, 23: DC Cable Stock
   await db.insert(schema.resourceAssignments).values([
+    // Phase 4.1 Site Preparation
     {
-      taskId: task4_3.id,
-      resourceId: resources[1].id,
-      allocation: 100,
+      taskId: task4_1.id,
+      resourceId: resources[2].id, // Construction Manager
+      allocation: 50,
     },
     {
-      taskId: task4_4.id,
-      resourceId: resources[1].id,
-      allocation: 75,
-    },
-    {
-      taskId: task4_4.id,
-      resourceId: resources[2].id,
-      allocation: 100,
-    },
-    {
-      taskId: task4_5.id,
-      resourceId: resources[3].id,
+      taskId: task4_1.id,
+      resourceId: resources[12].id, // Civil Works Crew
       allocation: 100,
     },
     {
       taskId: task4_1.id,
-      resourceId: resources[4].id,
+      resourceId: resources[16].id, // Excavator 320D
       allocation: 100,
     },
     {
-      taskId: task4_6.id,
-      resourceId: resources[5].id,
+      taskId: task4_1.id,
+      resourceId: resources[18].id, // Bulldozer
+      allocation: 100,
+    },
+    // Phase 4.2 Civil Works
+    {
+      taskId: task4_2.id,
+      resourceId: resources[6].id, // Civil Engineer
+      allocation: 100,
+    },
+    {
+      taskId: task4_2.id,
+      resourceId: resources[12].id, // Civil Works Crew
+      allocation: 100,
+    },
+    {
+      taskId: task4_2.id,
+      resourceId: resources[19].id, // Concrete Pump
+      allocation: 80,
+    },
+    // Phase 4.3 Mounting Structure Installation
+    {
+      taskId: task4_3.id,
+      resourceId: resources[13].id, // Structural Steel Team
+      allocation: 100,
+    },
+    {
+      taskId: task4_3.id,
+      resourceId: resources[15].id, // Mobile Crane
+      allocation: 80,
+    },
+    // Phase 4.4 Panel Installation
+    {
+      taskId: task4_4.id,
+      resourceId: resources[4].id, // Lead Electrical Engineer
       allocation: 50,
+    },
+    {
+      taskId: task4_4.id,
+      resourceId: resources[9].id, // Solar Installation Crew A
+      allocation: 100,
+    },
+    {
+      taskId: task4_4.id,
+      resourceId: resources[10].id, // Solar Installation Crew B
+      allocation: 100,
+    },
+    {
+      taskId: task4_4.id,
+      resourceId: resources[21].id, // Aerial Work Platform
+      allocation: 100,
+    },
+    // Phase 4.5 Electrical Installation
+    {
+      taskId: task4_5.id,
+      resourceId: resources[4].id, // Lead Electrical Engineer
+      allocation: 100,
+    },
+    {
+      taskId: task4_5.id,
+      resourceId: resources[11].id, // Electrical Installation Team
+      allocation: 100,
+    },
+    {
+      taskId: task4_5.id,
+      resourceId: resources[14].id, // Cable Pulling Team
+      allocation: 100,
+    },
+    {
+      taskId: task4_5.id,
+      resourceId: resources[20].id, // Cable Pulling Machine
+      allocation: 100,
+    },
+    // Phase 4.6 Substation Construction
+    {
+      taskId: task4_6.id,
+      resourceId: resources[7].id, // Instrumentation Engineer
+      allocation: 75,
+    },
+    {
+      taskId: task4_6.id,
+      resourceId: resources[15].id, // Mobile Crane
+      allocation: 50,
+    },
+    // Phase 5 Commissioning - future assignments
+    {
+      taskId: task5_1.id,
+      resourceId: resources[4].id, // Lead Electrical Engineer
+      allocation: 100,
+    },
+    {
+      taskId: task5_1.id,
+      resourceId: resources[8].id, // SCADA Specialist
+      allocation: 100,
     },
   ]);
 
@@ -1271,7 +1502,8 @@ async function seedDemoProject() {
   console.log("   - 8 risks");
   console.log("   - 7 issues");
   console.log("   - 11 cost items ($75M budget)");
-  console.log("   - 8 resources with assignments");
+  console.log("   - 24 EPC resources (management, engineering, crews, equipment, materials)");
+  console.log("   - 20 resource assignments across construction phases");
 }
 
 export { seedDemoProject, DEMO_ORG_SLUG, DEMO_USER_ID };

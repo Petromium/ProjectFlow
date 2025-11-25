@@ -739,6 +739,231 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Resources Routes =====
+  app.get('/api/projects/:projectId/resources', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      
+      // Check access
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const resources = await storage.getResourcesByProject(projectId);
+      res.json(resources);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  });
+
+  app.post('/api/resources', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const data = req.body;
+      
+      // Check access to project
+      if (!await checkProjectAccess(userId, data.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const resource = await storage.createResource(data);
+      res.json(resource);
+    } catch (error) {
+      console.error("Error creating resource:", error);
+      res.status(400).json({ message: "Failed to create resource" });
+    }
+  });
+
+  app.patch('/api/resources/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const resource = await storage.getResource(id);
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      // Check access
+      if (!await checkProjectAccess(userId, resource.projectId)) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      const updated = await storage.updateResource(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating resource:", error);
+      res.status(400).json({ message: "Failed to update resource" });
+    }
+  });
+
+  app.delete('/api/resources/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const resource = await storage.getResource(id);
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      // Check access
+      if (!await checkProjectAccess(userId, resource.projectId)) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      await storage.deleteResource(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ message: "Failed to delete resource" });
+    }
+  });
+
+  // Resource Assignments
+  app.get('/api/tasks/:taskId/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const assignments = await storage.getResourceAssignmentsByTask(taskId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching assignments:", error);
+      res.status(500).json({ message: "Failed to fetch assignments" });
+    }
+  });
+
+  app.post('/api/assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const assignment = await storage.createResourceAssignment(req.body);
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error creating assignment:", error);
+      res.status(400).json({ message: "Failed to create assignment" });
+    }
+  });
+
+  app.delete('/api/assignments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteResourceAssignment(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting assignment:", error);
+      res.status(500).json({ message: "Failed to delete assignment" });
+    }
+  });
+
+  // ===== Documents Routes =====
+  
+  // Get documents by project
+  app.get('/api/projects/:projectId/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const documents = await storage.getDocumentsByProject(projectId);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  // Get single document
+  app.get('/api/documents/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      if (!await checkProjectAccess(userId, document.projectId)) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      res.json(document);
+    } catch (error) {
+      console.error("Error fetching document:", error);
+      res.status(500).json({ message: "Failed to fetch document" });
+    }
+  });
+
+  // Create document
+  app.post('/api/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { projectId } = req.body;
+      
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const document = await storage.createDocument({
+        ...req.body,
+        createdBy: userId,
+      });
+      res.json(document);
+    } catch (error) {
+      console.error("Error creating document:", error);
+      res.status(400).json({ message: "Failed to create document" });
+    }
+  });
+
+  // Update document
+  app.patch('/api/documents/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      if (!await checkProjectAccess(userId, document.projectId)) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      const updated = await storage.updateDocument(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(400).json({ message: "Failed to update document" });
+    }
+  });
+
+  // Delete document
+  app.delete('/api/documents/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      if (!await checkProjectAccess(userId, document.projectId)) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      await storage.deleteDocument(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
   // ===== AI Assistant Routes =====
   
   // Get user's conversations

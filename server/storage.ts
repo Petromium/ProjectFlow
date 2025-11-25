@@ -57,6 +57,8 @@ import type {
   InsertOrganizationSubscription,
   AiUsageSummary,
   InsertAiUsageSummary,
+  InsertDocument,
+  Document,
 } from "@shared/schema";
 
 const sql = neon(process.env.DATABASE_URL!);
@@ -233,6 +235,14 @@ export interface IStorage {
   createCloudStorageConnection(connection: InsertCloudStorageConnection & { connectedBy: string }): Promise<CloudStorageConnection>;
   updateCloudStorageConnection(id: number, connection: Partial<InsertCloudStorageConnection>): Promise<CloudStorageConnection | undefined>;
   deleteCloudStorageConnection(id: number): Promise<void>;
+
+  // Documents
+  getDocument(id: number): Promise<Document | undefined>;
+  getDocumentsByProject(projectId: number): Promise<Document[]>;
+  getDocumentsByTask(taskId: number): Promise<Document[]>;
+  createDocument(document: InsertDocument & { createdBy: string }): Promise<Document>;
+  updateDocument(id: number, document: Partial<InsertDocument>): Promise<Document | undefined>;
+  deleteDocument(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1160,6 +1170,41 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCloudSyncedFilesByConnection(connectionId: number): Promise<void> {
     await db.delete(schema.cloudSyncedFiles).where(eq(schema.cloudSyncedFiles.connectionId, connectionId));
+  }
+
+  // Documents
+  async getDocument(id: number): Promise<Document | undefined> {
+    const [doc] = await db.select().from(schema.documents).where(eq(schema.documents.id, id));
+    return doc;
+  }
+
+  async getDocumentsByProject(projectId: number): Promise<Document[]> {
+    return db.select().from(schema.documents)
+      .where(eq(schema.documents.projectId, projectId))
+      .orderBy(desc(schema.documents.createdAt));
+  }
+
+  async getDocumentsByTask(taskId: number): Promise<Document[]> {
+    // Documents don't have a direct taskId - they're linked via tags/equipment
+    // Return empty for now - can be extended with junction table
+    return [];
+  }
+
+  async createDocument(document: InsertDocument & { createdBy: string }): Promise<Document> {
+    const [created] = await db.insert(schema.documents).values(document).returning();
+    return created;
+  }
+
+  async updateDocument(id: number, document: Partial<InsertDocument>): Promise<Document | undefined> {
+    const [updated] = await db.update(schema.documents)
+      .set({ ...document, updatedAt: new Date() })
+      .where(eq(schema.documents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    await db.delete(schema.documents).where(eq(schema.documents.id, id));
   }
 }
 

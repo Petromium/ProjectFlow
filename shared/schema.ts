@@ -304,6 +304,7 @@ export const resources = pgTable("resources", {
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: text("type").notNull(), // human, equipment, material
+  discipline: disciplineEnum("discipline").default("general"), // EPC discipline
   availability: integer("availability").notNull().default(100), // percentage
   costPerHour: decimal("cost_per_hour", { precision: 10, scale: 2 }),
   currency: varchar("currency", { length: 3 }).notNull().default("USD"),

@@ -26,6 +26,16 @@ A comprehensive, multi-tenant SaaS platform for EPC (Engineering, Procurement, C
 - **Label Management** - Settings page tab for normalizing discipline and assignee labels after import (bulk find-and-replace)
 - **EPC Analytics Dashboard** with S-Curve chart and EVA performance indicators (SPI/CPI gauges)
 - **RACI Matrix with Inheritance** - Redesigned with 4 RACI columns (R/A/C/I), collapsible WBS tree, multi-select dropdowns for stakeholders + resources, automatic inheritance propagation from parent to children, reset to parent capability, Accountable warning for multiple assignments
+- **Resource Assignments Tab** - Enhanced ResourceDetailsModal showing all task assignments for a resource with WBS code, dates, allocation %, and planned hours
+- **Resource Utilization View** - Timeline visualization with weekly periods showing utilization % per resource, color-coded cells (green/yellow/orange/red), over-allocation warnings, prorated allocation calculations
+- **CPM Scheduling Engine** - Full Critical Path Method implementation:
+  - Forward Pass: Calculates Early Start (ES) and Early Finish (EF) dates
+  - Backward Pass: Calculates Late Start (LS) and Late Finish (LF) dates
+  - Float Calculation: Total Float and Free Float for each task
+  - Critical Path: Identifies zero-float tasks as critical
+  - Supports all dependency types (FS, SS, FF, SF) with lag/lead time
+  - Business day calculations (skips weekends)
+  - Constraint handling (ASAP, SNET, FNET, MSO, MFO)
 
 ### 🚧 In Progress / Needs Completion
 - PWA offline capabilities (IndexedDB caching, 7-day support)
@@ -144,6 +154,15 @@ A comprehensive, multi-tenant SaaS platform for EPC (Engineering, Procurement, C
 - Integration: SendGrid API
 - Features: Placeholder replacement ({{PROJECT_NAME}}, etc.), preview, test sending
 - Types: 10 notification types (task-assigned, risk-identified, etc.)
+
+### CPM Scheduling
+- `POST /api/projects/:projectId/schedule` - Run CPM scheduling (calculates ES, EF, LS, LF, Float, Critical Path)
+- `GET /api/projects/:projectId/schedule` - Get schedule data for all tasks
+- `GET /api/projects/:projectId/critical-path` - Get critical path tasks and total duration
+
+### Resource Utilization
+- `GET /api/projects/:projectId/resource-utilization` - Get resource utilization timeline with weekly periods
+- `GET /api/resources/:resourceId/assignments` - Get all task assignments for a resource
 
 ## Frontend Pages
 

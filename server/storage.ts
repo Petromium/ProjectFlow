@@ -178,7 +178,7 @@ export interface IStorage {
   // AI Conversations
   getAiConversation(id: number): Promise<AiConversation | undefined>;
   getAiConversationsByUser(userId: string): Promise<AiConversation[]>;
-  getAiConversationsByProject(projectId: number): Promise<AiConversation[]>;
+  getAiConversationsByProject(projectId: number, userId: string): Promise<AiConversation[]>;
   createAiConversation(conversation: InsertAiConversation): Promise<AiConversation>;
   updateAiConversation(id: number, conversation: Partial<InsertAiConversation>): Promise<AiConversation | undefined>;
   deleteAiConversation(id: number): Promise<void>;
@@ -776,9 +776,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(schema.aiConversations.updatedAt));
   }
 
-  async getAiConversationsByProject(projectId: number): Promise<AiConversation[]> {
+  async getAiConversationsByProject(projectId: number, userId: string): Promise<AiConversation[]> {
     return await db.select().from(schema.aiConversations)
-      .where(eq(schema.aiConversations.projectId, projectId))
+      .where(and(
+        eq(schema.aiConversations.projectId, projectId),
+        eq(schema.aiConversations.userId, userId)
+      ))
       .orderBy(desc(schema.aiConversations.updatedAt));
   }
 

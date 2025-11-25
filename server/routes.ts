@@ -1331,7 +1331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const conversations = await storage.getAiConversationsByProject(projectId);
+      const conversations = await storage.getAiConversationsByProject(projectId, userId);
       res.json(conversations);
     } catch (error) {
       console.error("Error fetching project conversations:", error);
@@ -1477,6 +1477,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error in AI chat:", error);
       res.status(500).json({ message: error.message || "Failed to get AI response" });
+    }
+  });
+
+  // Update conversation (rename)
+  const updateConversationSchema = z.object({
+    title: z.string().min(1).max(100),
+  });
+  
+  app.patch('/api/ai/conversations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      const data = updateConversationSchema.parse(req.body);
+      
+      const conversation = await storage.getAiConversation(id);
+      if (!conversation || conversation.userId !== userId) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+      
+      const updated = await storage.updateAiConversation(id, { title: data.title });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating conversation:", error);
+      res.status(500).json({ message: "Failed to update conversation" });
     }
   });
 

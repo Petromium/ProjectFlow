@@ -3,7 +3,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send, Plus, Trash2, Bot, User, Sparkles, AlertCircle } from "lucide-react";
+import { MessageSquare, Send, Plus, Trash2, Bot, User, Sparkles, AlertCircle, Pencil, Copy, Check, Settings as SettingsIcon } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
 import { useProject } from "@/contexts/ProjectContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -19,6 +21,10 @@ import {
 } from "@/components/ui/dialog";
 import type { AiConversation, AiMessage } from "@shared/schema";
 import { Card } from "@/components/ui/card";
+import { AIHelpPanel } from "@/components/ai/AIHelpPanel";
+import { AISettingsModal, getAISettings, type AISettings } from "@/components/ai/AISettingsModal";
+import { AIFileAttachment, type AttachmentFile, prepareAttachmentsForMessage } from "@/components/ai/AIFileAttachment";
+import { AIMentionInput } from "@/components/ai/AIMentionInput";
 
 export default function AIAssistantPage() {
   const { selectedProjectId, selectedProject } = useProject();
@@ -27,6 +33,13 @@ export default function AIAssistantPage() {
   const [messageInput, setMessageInput] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [conversationToRename, setConversationToRename] = useState<AiConversation | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AISettings>(() => getAISettings());
+  const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevProjectIdRef = useRef<number | null>(null);
 
@@ -137,20 +150,68 @@ export default function AIAssistantPage() {
     },
   });
 
+  // Rename conversation mutation
+  const renameConversationMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: number; title: string }) => {
+      return await apiRequest("PATCH", `/api/ai/conversations/${id}`, { title });
+    },
+    onSuccess: () => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/ai/conversations/project/${selectedProjectId}`] });
+      }
+      setRenameDialogOpen(false);
+      setConversationToRename(null);
+      setNewTitle("");
+      toast({ title: "Success", description: "Conversation renamed" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedConversationId) return;
-    sendMessageMutation.mutate(messageInput);
+    
+    let fullMessage = messageInput;
+    if (attachments.length > 0) {
+      const attachmentText = await prepareAttachmentsForMessage(attachments);
+      fullMessage = messageInput + attachmentText;
+      setAttachments([]);
+    }
+    
+    sendMessageMutation.mutate(fullMessage);
   };
 
   const handleDeleteConversation = (id: number) => {
     setConversationToDelete(id);
     setDeleteDialogOpen(true);
+  };
+
+  const handleRenameConversation = (conversation: AiConversation) => {
+    setConversationToRename(conversation);
+    setNewTitle(conversation.title || "");
+    setRenameDialogOpen(true);
+  };
+
+  const handleRenameSubmit = () => {
+    if (!conversationToRename || !newTitle.trim()) return;
+    renameConversationMutation.mutate({ id: conversationToRename.id, title: newTitle.trim() });
+  };
+
+  const handleCopyMessage = async (content: string, messageIndex: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageIndex);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to copy to clipboard", variant: "destructive" });
+    }
   };
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
@@ -168,16 +229,27 @@ export default function AIAssistantPage() {
             <Bot className="h-5 w-5 text-primary" data-testid="icon-bot" />
             <h2 className="font-semibold" data-testid="text-conversations-title">AI Assistant</h2>
           </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => createConversationMutation.mutate()}
-            disabled={createConversationMutation.isPending || !selectedProjectId}
-            data-testid="button-new-conversation"
-            title={!selectedProjectId ? "Please select a project first" : "Create new conversation"}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setSettingsOpen(true)}
+              data-testid="button-ai-settings"
+              title="AI Settings"
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => createConversationMutation.mutate()}
+              disabled={createConversationMutation.isPending || !selectedProjectId}
+              data-testid="button-new-conversation"
+              title={!selectedProjectId ? "Please select a project first" : "Create new conversation"}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <ScrollArea className="flex-1">
@@ -216,18 +288,34 @@ export default function AIAssistantPage() {
                       {new Date(conversation.updatedAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteConversation(conversation.id);
-                    }}
-                    data-testid={`button-delete-conversation-${conversation.id}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRenameConversation(conversation);
+                      }}
+                      data-testid={`button-rename-conversation-${conversation.id}`}
+                      title="Rename conversation"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConversation(conversation.id);
+                      }}
+                      data-testid={`button-delete-conversation-${conversation.id}`}
+                      title="Delete conversation"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
@@ -308,20 +396,72 @@ export default function AIAssistantPage() {
                       data-testid={`message-${message.role}-${index}`}
                     >
                       {message.role === 'assistant' && (
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
                           <Bot className="h-4 w-4 text-primary" />
                         </div>
                       )}
                       <div
-                        className={`max-w-[70%] rounded-lg p-3 ${
+                        className={`max-w-[70%] rounded-lg p-3 relative group ${
                           message.role === 'user'
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted'
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap" data-testid={`text-message-content-${index}`}>
-                          {message.content}
-                        </p>
+                        {message.role === 'assistant' ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-none" data-testid={`text-message-content-${index}`}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc">{children}</ul>,
+                                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal">{children}</ol>,
+                                li: ({ children }) => <li className="mb-1">{children}</li>,
+                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                                code: ({ className, children }) => {
+                                  const isInline = !className;
+                                  return isInline ? (
+                                    <code className="bg-background/50 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+                                  ) : (
+                                    <code className="block bg-background/50 p-2 rounded text-xs font-mono overflow-x-auto mb-2">{children}</code>
+                                  );
+                                },
+                                pre: ({ children }) => <pre className="bg-background/50 p-2 rounded overflow-x-auto mb-2">{children}</pre>,
+                                table: ({ children }) => <table className="border-collapse border border-border mb-2 w-full text-xs">{children}</table>,
+                                th: ({ children }) => <th className="border border-border p-1 bg-background/50 font-semibold">{children}</th>,
+                                td: ({ children }) => <td className="border border-border p-1">{children}</td>,
+                                blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-2 italic mb-2">{children}</blockquote>,
+                                a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{children}</a>,
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap" data-testid={`text-message-content-${index}`}>
+                            {message.content}
+                          </p>
+                        )}
+                        
+                        {/* Copy button for assistant messages */}
+                        {message.role === 'assistant' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleCopyMessage(message.content, index)}
+                            data-testid={`button-copy-message-${index}`}
+                            title="Copy message"
+                          >
+                            {copiedMessageId === index ? (
+                              <Check className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </Button>
+                        )}
+                        
                         {message.tokensUsed > 0 && message.role === 'assistant' && (
                           <div className="mt-2 text-xs opacity-70" data-testid={`text-tokens-${index}`}>
                             {message.tokensUsed} tokens
@@ -329,12 +469,28 @@ export default function AIAssistantPage() {
                         )}
                       </div>
                       {message.role === 'user' && (
-                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0 mt-1">
                           <User className="h-4 w-4" />
                         </div>
                       )}
                     </div>
                   ))}
+                  
+                  {/* Typing indicator */}
+                  {sendMessageMutation.isPending && (
+                    <div className="flex gap-3 justify-start" data-testid="typing-indicator">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Bot className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="bg-muted rounded-lg p-3 flex items-center gap-1">
+                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <span className="ml-2 text-sm text-muted-foreground">AI is thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -342,20 +498,34 @@ export default function AIAssistantPage() {
 
             {/* Message Input */}
             <div className="p-4 border-t">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <Textarea
+              {/* Attachment Preview */}
+              {attachments.length > 0 && (
+                <div className="mb-2">
+                  <AIFileAttachment
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    disabled={sendMessageMutation.isPending}
+                  />
+                </div>
+              )}
+              
+              <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+                <AIFileAttachment
+                  attachments={[]}
+                  onAttachmentsChange={(newFiles) => setAttachments(prev => [...prev, ...newFiles])}
+                  disabled={sendMessageMutation.isPending}
+                />
+                <AIMentionInput
                   value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  placeholder="Ask me anything about your project..."
-                  className="min-h-[60px] resize-none"
+                  onChange={setMessageInput}
+                  placeholder="Ask me anything about your project... Use @ to mention items"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      handleSendMessage(e);
+                      handleSendMessage(e as any);
                     }
                   }}
                   disabled={sendMessageMutation.isPending}
-                  data-testid="input-message"
                 />
                 <Button
                   type="submit"
@@ -367,12 +537,19 @@ export default function AIAssistantPage() {
                 </Button>
               </form>
               <p className="text-xs text-muted-foreground mt-2" data-testid="text-hint">
-                Press Enter to send, Shift+Enter for new line
+                Press Enter to send, Shift+Enter for new line. Use @ to mention items, or click the paperclip to attach files.
               </p>
             </div>
           </>
         )}
       </Card>
+
+      {/* Help Panel */}
+      <AIHelpPanel 
+        onExampleClick={(example) => {
+          setMessageInput(example);
+        }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -402,6 +579,58 @@ export default function AIAssistantPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Rename Conversation Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle data-testid="text-rename-dialog-title">Rename Conversation</DialogTitle>
+            <DialogDescription data-testid="text-rename-dialog-description">
+              Enter a new name for this conversation.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Conversation name..."
+            maxLength={100}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleRenameSubmit();
+              }
+            }}
+            data-testid="input-rename"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRenameDialogOpen(false);
+                setConversationToRename(null);
+                setNewTitle("");
+              }}
+              data-testid="button-cancel-rename"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRenameSubmit}
+              disabled={!newTitle.trim() || renameConversationMutation.isPending}
+              data-testid="button-confirm-rename"
+            >
+              Rename
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Settings Modal */}
+      <AISettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onSettingsChange={setAiSettings}
+      />
     </div>
   );
 }

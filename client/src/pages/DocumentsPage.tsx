@@ -109,8 +109,9 @@ const DOC_STATUSES = [
   { value: "draft", label: "Draft" },
   { value: "ifa", label: "Issued for Approval (IFA)" },
   { value: "ifc", label: "Issued for Construction (IFC)" },
-  { value: "as_built", label: "As-Built" },
+  { value: "as-built", label: "As-Built" },
   { value: "superseded", label: "Superseded" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 interface DocumentFormData {
@@ -128,7 +129,7 @@ interface DocumentFormData {
 
 function DocumentsPageContent() {
   const { selectedProjectId } = useProject();
-  const { selectedDocumentId, setSelectedDocumentId } = useDocuments();
+  const { documents, isLoading, selectedDocumentId, setSelectedDocumentId } = useDocuments();
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
@@ -151,11 +152,6 @@ function DocumentsPageContent() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: documents = [], isLoading } = useQuery<Document[]>({
-    queryKey: [`/api/projects/${selectedProjectId}/documents`],
-    enabled: !!selectedProjectId,
-  });
-
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       return await apiRequest("POST", `/api/documents`, {
@@ -164,7 +160,7 @@ function DocumentsPageContent() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/documents`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProjectId, "documents"] });
       toast({
         title: "Success",
         description: "Document created successfully",
@@ -185,7 +181,7 @@ function DocumentsPageContent() {
       return await apiRequest("PATCH", `/api/documents/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/documents`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProjectId, "documents"] });
       toast({
         title: "Success",
         description: "Document updated successfully",
@@ -206,7 +202,7 @@ function DocumentsPageContent() {
       return await apiRequest("DELETE", `/api/documents/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/documents`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProjectId, "documents"] });
       toast({
         title: "Success",
         description: "Document deleted successfully",
@@ -406,11 +402,12 @@ function DocumentsPageContent() {
   const getStatusBadge = (status: string) => {
     const statusConfig = DOC_STATUSES.find(s => s.value === status);
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      draft: "secondary",
-      ifa: "outline",
-      ifc: "default",
-      as_built: "default",
-      superseded: "destructive",
+      "draft": "secondary",
+      "ifa": "outline",
+      "ifc": "default",
+      "as-built": "default",
+      "superseded": "destructive",
+      "cancelled": "destructive",
     };
     return (
       <Badge variant={variants[status] || "secondary"}>

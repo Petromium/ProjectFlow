@@ -69,13 +69,13 @@ export function DocumentStats() {
   const withAttachments = documents.filter(d => d.filePath);
 
   const technicalDocs = documents.filter(d => 
-    ["drawing", "specification", "datasheet", "p_id", "calculation", "3d_model", "plot_plan"].includes(d.documentType || "")
+    ["drawing", "specification", "datasheet", "calculation", "report"].includes(d.documentType || "")
   );
   const procedureDocs = documents.filter(d => 
-    ["sop", "work_instruction", "checklist", "method_statement", "itp"].includes(d.documentType || "")
+    ["sop", "procedure", "work-instruction", "checklist"].includes(d.documentType || "")
   );
   const commercialDocs = documents.filter(d => 
-    ["invoice", "rfp", "contract", "purchase_order", "quote", "warranty"].includes(d.documentType || "")
+    ["invoice", "rfp", "contract", "purchase-order", "quote", "warranty"].includes(d.documentType || "")
   );
 
   return (

@@ -18,6 +18,7 @@ import { RiskSnapshot } from "./RiskSnapshot";
 import { CostSnapshot } from "./CostSnapshot";
 import { WBSLinkage } from "./WBSLinkage";
 import { AIAssistantGuide } from "./AIAssistantGuide";
+import { DocumentStats } from "./DocumentStats";
 
 interface ContextAwareRightRailProps {
   className?: string;
@@ -35,6 +36,7 @@ export function ContextAwareRightRail({ className }: ContextAwareRightRailProps)
     showCostSnapshot,
     showWBSLinkage,
     showAIAssistantGuide,
+    showDocumentStats,
   } = usePage();
 
   const isMobile = useIsMobile();
@@ -243,6 +245,18 @@ export function ContextAwareRightRail({ className }: ContextAwareRightRailProps)
                 transition={{ duration: 0.2 }}
               >
                 <AIAssistantGuide />
+              </motion.div>
+            )}
+
+            {showDocumentStats && (
+              <motion.div
+                key="document-stats"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <DocumentStats />
               </motion.div>
             )}
           </AnimatePresence>

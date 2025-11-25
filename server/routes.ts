@@ -371,7 +371,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Task not found" });
       }
       
-      const data = updateTaskSchema.parse(req.body);
+      // Convert date strings to Date objects (JSON serializes dates as strings)
+      // Empty strings are treated as null to allow clearing date fields
+      const body = { ...req.body };
+      const normalizeDateField = (value: any): Date | null | undefined => {
+        if (value === null || value === undefined) return value;
+        if (typeof value === 'string') {
+          if (value.trim() === '') return null;
+          return new Date(value);
+        }
+        return value;
+      };
+      
+      if ('startDate' in body) body.startDate = normalizeDateField(body.startDate);
+      if ('endDate' in body) body.endDate = normalizeDateField(body.endDate);
+      if ('constraintDate' in body) body.constraintDate = normalizeDateField(body.constraintDate);
+      if ('earlyStart' in body) body.earlyStart = normalizeDateField(body.earlyStart);
+      if ('earlyFinish' in body) body.earlyFinish = normalizeDateField(body.earlyFinish);
+      if ('lateStart' in body) body.lateStart = normalizeDateField(body.lateStart);
+      if ('lateFinish' in body) body.lateFinish = normalizeDateField(body.lateFinish);
+      
+      const data = updateTaskSchema.parse(body);
       const updated = await storage.updateTask(id, data);
       
       // Notify connected clients

@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Search, Plus, Download, Bell, Moon, Sun, User, X, Building2, FolderKanban } from "lucide-react";
+import { useState, useRef } from "react";
+import { Search, Plus, Download, Upload, Bell, Moon, Sun, User, X, Building2, FolderKanban } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,7 +35,10 @@ import { Badge } from "@/components/ui/badge";
 export function TopBar() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     organizations,
     projects,
@@ -53,6 +58,112 @@ export function TopBar() {
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+
+  const handleExportJSON = async () => {
+    if (!selectedProjectId) {
+      toast({ title: "Error", description: "Please select a project first", variant: "destructive" });
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/projects/${selectedProjectId}/export`, { credentials: 'include' });
+      if (!response.ok) throw new Error("Export failed");
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedProject?.code || 'project'}_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Success", description: "Project exported successfully" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to export project", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (!selectedProjectId) {
+      toast({ title: "Error", description: "Please select a project first", variant: "destructive" });
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/projects/${selectedProjectId}/export?format=csv`, { credentials: 'include' });
+      if (!response.ok) throw new Error("Export failed");
+      const csvData = await response.text();
+      const blob = new Blob([csvData], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedProject?.code || 'project'}_tasks_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Success", description: "Tasks exported as CSV" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to export CSV", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedProjectId) {
+      toast({ title: "Error", description: "Please select a project first", variant: "destructive" });
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/projects/${selectedProjectId}/reports/status`, { credentials: 'include' });
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedProject?.code || 'project'}_status_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Success", description: "PDF report downloaded" });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to generate PDF report", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportJSON = () => {
+    if (!selectedProjectId) {
+      toast({ title: "Error", description: "Please select a project first", variant: "destructive" });
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedProjectId) return;
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      
+      const response = await apiRequest("POST", `/api/projects/${selectedProjectId}/import`, data);
+      if (response.ok) {
+        toast({ title: "Success", description: "Project data imported successfully" });
+        window.location.reload();
+      } else {
+        throw new Error("Import failed");
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to import project data", variant: "destructive" });
+    }
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   return (
     <header className="flex h-14 md:h-16 items-center gap-2 md:gap-4 border-b bg-background px-2 md:px-4">
@@ -244,22 +355,42 @@ export function TopBar() {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json"
+        className="hidden"
+        data-testid="input-import-file"
+      />
+      
       <div className="flex items-center gap-1 md:gap-2 ml-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="hidden md:flex" data-testid="button-import-export">
+            <Button variant="ghost" size="icon" className="hidden md:flex" disabled={isExporting} data-testid="button-import-export">
               <Download className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Import / Export</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-item-import-json">Import JSON</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-item-import-csv">Import CSV</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleImportJSON} data-testid="menu-item-import-json">
+              <Upload className="h-4 w-4 mr-2" />
+              Import JSON
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-item-export-pdf">Export as PDF</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-item-export-json">Export as JSON</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-item-export-csv">Export as CSV</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPDF} data-testid="menu-item-export-pdf">
+              <Download className="h-4 w-4 mr-2" />
+              Export as PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportJSON} data-testid="menu-item-export-json">
+              <Download className="h-4 w-4 mr-2" />
+              Export as JSON
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportCSV} data-testid="menu-item-export-csv">
+              <Download className="h-4 w-4 mr-2" />
+              Export as CSV
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 

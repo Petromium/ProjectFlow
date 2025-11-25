@@ -2,17 +2,15 @@ import PdfPrinter from 'pdfmake';
 import type { TDocumentDefinitions, Content, TableCell, Style, StyleDictionary, TFontDictionary } from 'pdfmake/interfaces';
 import type { Project, Risk, Issue, Task, CostItem, Stakeholder } from '@shared/schema';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const fontsDir = path.join(process.cwd(), 'server', 'fonts');
 
 const fonts: TFontDictionary = {
   Roboto: {
-    normal: path.join(__dirname, 'fonts/Roboto-Regular.ttf'),
-    bold: path.join(__dirname, 'fonts/Roboto-Medium.ttf'),
-    italics: path.join(__dirname, 'fonts/Roboto-Italic.ttf'),
-    bolditalics: path.join(__dirname, 'fonts/Roboto-MediumItalic.ttf')
+    normal: path.join(fontsDir, 'Roboto-Regular.ttf'),
+    bold: path.join(fontsDir, 'Roboto-Medium.ttf'),
+    italics: path.join(fontsDir, 'Roboto-Italic.ttf'),
+    bolditalics: path.join(fontsDir, 'Roboto-MediumItalic.ttf')
   }
 };
 

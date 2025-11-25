@@ -21,15 +21,16 @@ A comprehensive, multi-tenant SaaS platform for EPC (Engineering, Procurement, C
 - WebSocket real-time collaboration infrastructure
 - Auto-generated sequential codes (RISK-001, ISS-001, etc.)
 - **Dependencies tab redesign** with two-column layout (Predecessors/Successors), inline editing, and full CRUD support
+- **Import/Export functionality** - JSON export (full project data), CSV export (tasks), PDF status reports via TopBar dropdown
+- **EPC Analytics Dashboard** with S-Curve chart and EVA performance indicators (SPI/CPI gauges)
 
 ### 🚧 In Progress / Needs Completion
 - PWA offline capabilities (IndexedDB caching, 7-day support)
 - Google Drive, OneDrive, Dropbox cloud storage connectors
-- Cost Management and Dashboard pages with real data
 - Admin dashboard and marketing landing page
 - End-to-end testing with Playwright
 
-**Last Updated:** November 24, 2024
+**Last Updated:** November 25, 2024
 
 ## Architecture
 

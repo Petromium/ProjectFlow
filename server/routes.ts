@@ -1340,10 +1340,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new conversation
+  const createConversationSchema = z.object({
+    title: z.string().optional(),
+    projectId: z.number().optional(),
+  });
+  
   app.post('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const data = insertAiConversationSchema.parse(req.body);
+      const data = createConversationSchema.parse(req.body);
       
       // Verify project access if projectId is provided
       if (data.projectId) {
@@ -1353,7 +1358,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const conversation = await storage.createAiConversation({
-        ...data,
+        title: data.title || "New Conversation",
+        projectId: data.projectId || null,
         userId
       });
       
@@ -1490,6 +1496,256 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting conversation:", error);
       res.status(500).json({ message: "Failed to delete conversation" });
+    }
+  });
+
+  // ===== Project Export/Import Routes =====
+  
+  // Export project data as JSON
+  app.get('/api/projects/:projectId/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      const format = req.query.format as string;
+      
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const [tasks, risks, issues, stakeholders, costItems, documents, resources, dependencies] = await Promise.all([
+        storage.getTasksByProject(projectId),
+        storage.getRisksByProject(projectId),
+        storage.getIssuesByProject(projectId),
+        storage.getStakeholdersByProject(projectId),
+        storage.getCostItemsByProject(projectId),
+        storage.getDocumentsByProject(projectId),
+        storage.getResourcesByProject(projectId),
+        storage.getDependenciesByProject(projectId)
+      ]);
+      
+      if (format === 'csv') {
+        const csvRows = ['ID,WBS Code,Name,Status,Progress,Start Date,End Date,Assigned To,Priority'];
+        for (const task of tasks) {
+          csvRows.push([
+            task.id,
+            task.wbsCode || '',
+            `"${(task.name || '').replace(/"/g, '""')}"`,
+            task.status || '',
+            task.progress || 0,
+            task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
+            task.endDate ? new Date(task.endDate).toISOString().split('T')[0] : '',
+            `"${(task.assignedTo || '').replace(/"/g, '""')}"`,
+            task.priority || ''
+          ].join(','));
+        }
+        res.setHeader('Content-Type', 'text/csv');
+        res.send(csvRows.join('\n'));
+      } else {
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          version: "1.0",
+          project: {
+            name: project.name,
+            code: project.code,
+            description: project.description,
+            status: project.status,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            budget: project.budget,
+            currency: project.currency
+          },
+          tasks: tasks.map(t => ({
+            wbsCode: t.wbsCode,
+            name: t.name,
+            description: t.description,
+            status: t.status,
+            progress: t.progress,
+            startDate: t.startDate,
+            endDate: t.endDate,
+            assignedTo: t.assignedTo,
+            priority: t.priority,
+            estimatedHours: t.estimatedHours,
+            actualHours: t.actualHours,
+            discipline: t.discipline
+          })),
+          risks: risks.map(r => ({
+            code: r.code,
+            title: r.title,
+            description: r.description,
+            category: r.category,
+            probability: r.probability,
+            impact: r.impact,
+            status: r.status,
+            owner: r.owner,
+            mitigationStrategy: r.mitigationStrategy,
+            contingencyPlan: r.contingencyPlan
+          })),
+          issues: issues.map(i => ({
+            code: i.code,
+            title: i.title,
+            description: i.description,
+            priority: i.priority,
+            status: i.status,
+            assignedTo: i.assignedTo,
+            reportedBy: i.reportedBy,
+            resolution: i.resolution
+          })),
+          stakeholders: stakeholders.map(s => ({
+            name: s.name,
+            role: s.role,
+            organization: s.organization,
+            email: s.email,
+            phone: s.phone,
+            influence: s.influence,
+            interest: s.interest
+          })),
+          costItems: costItems.map(c => ({
+            description: c.description,
+            category: c.category,
+            budgeted: c.budgeted,
+            actual: c.actual,
+            currency: c.currency
+          })),
+          documents: documents.map(d => ({
+            documentNumber: d.documentNumber,
+            title: d.title,
+            revision: d.revision,
+            discipline: d.discipline,
+            documentType: d.documentType,
+            status: d.status
+          }))
+        };
+        
+        res.json(exportData);
+      }
+    } catch (error) {
+      console.error("Error exporting project:", error);
+      res.status(500).json({ message: "Failed to export project" });
+    }
+  });
+  
+  // Import project data
+  app.post('/api/projects/:projectId/import', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const importData = req.body;
+      
+      if (!importData || !importData.version) {
+        return res.status(400).json({ message: "Invalid import format" });
+      }
+      
+      let importedCounts = {
+        tasks: 0,
+        risks: 0,
+        issues: 0,
+        stakeholders: 0,
+        costItems: 0
+      };
+      
+      if (importData.tasks && Array.isArray(importData.tasks)) {
+        for (const task of importData.tasks) {
+          await storage.createTask({
+            projectId,
+            name: task.name || task.title,
+            wbsCode: task.wbsCode || `${Date.now()}`,
+            createdBy: userId,
+            description: task.description,
+            status: task.status || 'not-started',
+            progress: task.progress || 0,
+            startDate: task.startDate ? new Date(task.startDate) : null,
+            endDate: task.endDate ? new Date(task.endDate) : null,
+            assignedTo: task.assignedTo || task.assignee,
+            priority: task.priority || 'medium',
+            estimatedHours: task.estimatedHours,
+            actualHours: task.actualHours,
+            discipline: task.discipline
+          });
+          importedCounts.tasks++;
+        }
+      }
+      
+      if (importData.risks && Array.isArray(importData.risks)) {
+        for (const risk of importData.risks) {
+          await storage.createRisk({
+            projectId,
+            title: risk.title,
+            description: risk.description,
+            category: risk.category || 'other',
+            probability: risk.probability || 'medium',
+            impact: risk.impact || 'medium',
+            status: risk.status || 'identified',
+            owner: risk.owner,
+            mitigationStrategy: risk.mitigationStrategy || risk.mitigation,
+            contingencyPlan: risk.contingencyPlan || risk.contingency
+          });
+          importedCounts.risks++;
+        }
+      }
+      
+      if (importData.issues && Array.isArray(importData.issues)) {
+        for (const issue of importData.issues) {
+          await storage.createIssue({
+            projectId,
+            title: issue.title,
+            description: issue.description,
+            priority: issue.priority || 'medium',
+            status: issue.status || 'open',
+            assignedTo: issue.assignedTo,
+            reportedBy: issue.reportedBy,
+            resolution: issue.resolution
+          });
+          importedCounts.issues++;
+        }
+      }
+      
+      if (importData.stakeholders && Array.isArray(importData.stakeholders)) {
+        for (const stakeholder of importData.stakeholders) {
+          await storage.createStakeholder({
+            projectId,
+            name: stakeholder.name,
+            role: stakeholder.role,
+            organization: stakeholder.organization,
+            email: stakeholder.email,
+            phone: stakeholder.phone,
+            influence: stakeholder.influence,
+            interest: stakeholder.interest
+          });
+          importedCounts.stakeholders++;
+        }
+      }
+      
+      if (importData.costItems && Array.isArray(importData.costItems)) {
+        for (const costItem of importData.costItems) {
+          await storage.createCostItem({
+            projectId,
+            description: costItem.description || costItem.name,
+            category: costItem.category || 'other',
+            budgeted: costItem.budgeted,
+            actual: costItem.actual,
+            currency: costItem.currency || 'USD'
+          });
+          importedCounts.costItems++;
+        }
+      }
+      
+      res.json({
+        success: true,
+        imported: importedCounts
+      });
+    } catch (error) {
+      console.error("Error importing project:", error);
+      res.status(500).json({ message: "Failed to import project" });
     }
   });
 
@@ -1953,7 +2209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -2001,7 +2257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -2063,7 +2319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -2082,7 +2338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -2110,7 +2366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       
@@ -2504,7 +2760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       
-      if (!await verifyProjectAccess(userId, projectId)) {
+      if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
       

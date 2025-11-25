@@ -171,6 +171,20 @@ A comprehensive, multi-tenant SaaS platform for EPC (Engineering, Procurement, C
 - Added request validation with Zod schemas
 - All routes protected with authentication
 
+## Demo Project
+Auto-assigned to all users on login with "viewer" role:
+- Organization: "Demo: GreenEnergy Solar" (slug: demo-solar-project)
+- Project: "50MW Riverside Solar Power Plant" ($75M budget)
+- 30+ tasks across 5 WBS levels (Design, Engineering, Procurement, Construction, Commissioning)
+- 22 task dependencies (all types: FS, SS, FF, SF)
+- 10 stakeholders (Owner, PM, Contractors, Consultants, etc.)
+- 8 risks with probability/impact assessments
+- 7 issues with priorities and status tracking
+- 11 cost items (equipment, labor, materials, permits)
+- 8 resources with task assignments
+
+To re-seed the demo project: `npx tsx server/seed-demo.ts --run`
+
 ## Sample Data
 Seeded database with:
 - 1 organization: "ACME Construction Corp"

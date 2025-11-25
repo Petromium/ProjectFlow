@@ -1,51 +1,184 @@
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useProject } from "@/contexts/ProjectContext";
+import { TaskModal } from "@/components/TaskModal";
+import type { Task } from "@shared/schema";
 
-const daysInMonth = 30;
-const startDay = 2;
-const today = 15;
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const mockEvents = [
-  { day: 5, title: "Kick-off Meeting", color: "bg-chart-1" },
-  { day: 5, title: "Site Survey", color: "bg-chart-2" },
-  { day: 12, title: "Design Review", color: "bg-chart-3" },
-  { day: 15, title: "Milestone: Foundation", color: "bg-chart-4" },
-  { day: 18, title: "Procurement Deadline", color: "bg-destructive" },
-  { day: 22, title: "Safety Inspection", color: "bg-chart-1" },
-  { day: 28, title: "Progress Report", color: "bg-chart-2" },
-];
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "completed": return "bg-green-500";
+    case "in-progress": return "bg-blue-500";
+    case "review": return "bg-purple-500";
+    case "on-hold": return "bg-amber-500";
+    default: return "bg-gray-400";
+  }
+};
+
+const getPriorityBorder = (priority: string) => {
+  switch (priority) {
+    case "critical": return "border-l-2 border-l-red-500";
+    case "high": return "border-l-2 border-l-orange-500";
+    default: return "";
+  }
+};
 
 export default function CalendarPage() {
+  const { selectedProjectId } = useProject();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedTask, setSelectedTask] = useState<Task | undefined>();
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+
+  const { 
+    data: tasks = [], 
+    isLoading 
+  } = useQuery<Task[]>({
+    queryKey: [`/api/projects/${selectedProjectId}/tasks`],
+    enabled: !!selectedProjectId,
+  });
+
+  const { year, month, daysInMonth, startDay, today, monthName } = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    const todayDate = new Date();
+    
+    return {
+      year: y,
+      month: m,
+      daysInMonth: lastDay.getDate(),
+      startDay: firstDay.getDay(),
+      today: todayDate.getFullYear() === y && todayDate.getMonth() === m ? todayDate.getDate() : -1,
+      monthName: firstDay.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    };
+  }, [currentDate]);
+
+  const tasksOnDate = useMemo(() => {
+    const taskMap: Map<number, Task[]> = new Map();
+    
+    tasks.forEach(task => {
+      if (task.startDate) {
+        const startDate = new Date(task.startDate);
+        if (startDate.getFullYear() === year && startDate.getMonth() === month) {
+          const day = startDate.getDate();
+          if (!taskMap.has(day)) taskMap.set(day, []);
+          taskMap.get(day)!.push({ ...task, _isStart: true } as any);
+        }
+      }
+      if (task.endDate) {
+        const endDate = new Date(task.endDate);
+        if (endDate.getFullYear() === year && endDate.getMonth() === month) {
+          const day = endDate.getDate();
+          if (!taskMap.has(day)) taskMap.set(day, []);
+          const existing = taskMap.get(day)!.find(t => t.id === task.id);
+          if (!existing) {
+            taskMap.get(day)!.push({ ...task, _isEnd: true } as any);
+          }
+        }
+      }
+    });
+    
+    return taskMap;
+  }, [tasks, year, month]);
+
+  const upcomingTasks = useMemo(() => {
+    const now = new Date();
+    return tasks
+      .filter(task => {
+        if (!task.endDate) return false;
+        const endDate = new Date(task.endDate);
+        return endDate >= now && task.status !== "completed";
+      })
+      .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime())
+      .slice(0, 5);
+  }, [tasks]);
+
   const weeks = Math.ceil((daysInMonth + startDay) / 7);
+
+  const goToPrevMonth = () => {
+    setCurrentDate(new Date(year, month - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(year, month + 1, 1));
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setTaskModalOpen(true);
+  };
+
+  const getDaysUntil = (date: string | Date) => {
+    const target = typeof date === 'string' ? new Date(date) : date;
+    const now = new Date();
+    const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff < 0) return `${Math.abs(diff)} days ago`;
+    return `${diff} days`;
+  };
+
+  if (!selectedProjectId) {
+    return (
+      <div className="p-6">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Please select a project from the dropdown above to view the calendar.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Calendar</h1>
+          <h1 className="text-3xl font-semibold" data-testid="page-title-calendar">Calendar</h1>
           <p className="text-muted-foreground">Project timeline and milestones</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" data-testid="button-prev-month">
+          <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
+            Today
+          </Button>
+          <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="px-4 font-semibold">December 2024</div>
-          <Button variant="outline" size="icon" data-testid="button-next-month">
+          <div className="px-4 font-semibold min-w-[180px] text-center">{monthName}</div>
+          <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Monthly View</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Monthly View</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            {WEEKDAYS.map((day) => (
               <div
                 key={day}
                 className="bg-muted p-3 text-center text-sm font-semibold"
@@ -58,14 +191,14 @@ export default function CalendarPage() {
               const dayNumber = index - startDay + 1;
               const isValidDay = dayNumber > 0 && dayNumber <= daysInMonth;
               const isToday = dayNumber === today;
-              const dayEvents = mockEvents.filter(e => e.day === dayNumber);
+              const dayTasks = tasksOnDate.get(dayNumber) || [];
 
               return (
                 <div
                   key={index}
                   className={cn(
-                    "bg-background p-2 min-h-24 hover-elevate",
-                    isToday && "ring-2 ring-primary",
+                    "bg-background p-2 min-h-28",
+                    isToday && "ring-2 ring-primary ring-inset",
                     !isValidDay && "bg-muted/30"
                   )}
                   data-testid={isValidDay ? `calendar-day-${dayNumber}` : undefined}
@@ -81,18 +214,26 @@ export default function CalendarPage() {
                         {dayNumber}
                       </div>
                       <div className="space-y-1">
-                        {dayEvents.map((event, i) => (
+                        {dayTasks.slice(0, 3).map((task: any) => (
                           <div
-                            key={i}
+                            key={`${task.id}-${task._isStart ? 'start' : 'end'}`}
                             className={cn(
-                              "text-xs px-1 py-0.5 rounded text-white truncate",
-                              event.color
+                              "text-xs px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-80",
+                              getStatusColor(task.status),
+                              getPriorityBorder(task.priority)
                             )}
-                            title={event.title}
+                            title={`${task.name} (${task._isStart ? 'Start' : 'Due'})`}
+                            onClick={() => handleTaskClick(task)}
+                            data-testid={`calendar-task-${task.id}`}
                           >
-                            {event.title}
+                            {task._isStart ? "▶ " : "◼ "}{task.name}
                           </div>
                         ))}
+                        {dayTasks.length > 3 && (
+                          <div className="text-xs text-muted-foreground">
+                            +{dayTasks.length - 3} more
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -104,31 +245,52 @@ export default function CalendarPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Upcoming Events</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Upcoming Deadlines</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {mockEvents
-              .filter(e => e.day >= today)
-              .sort((a, b) => a.day - b.day)
-              .map((event, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover-elevate">
-                  <div className={cn("w-1 h-12 rounded", event.color)} />
-                  <div className="flex-1">
-                    <p className="font-medium">{event.title}</p>
+          {upcomingTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No upcoming deadlines. All tasks are either completed or have no end date set.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {upcomingTasks.map((task) => (
+                <div 
+                  key={task.id} 
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg hover-elevate cursor-pointer",
+                    getPriorityBorder(task.priority)
+                  )}
+                  onClick={() => handleTaskClick(task)}
+                  data-testid={`upcoming-task-${task.id}`}
+                >
+                  <div className={cn("w-1 h-12 rounded", getStatusColor(task.status))} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{task.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      December {event.day}, 2024
+                      Due: {new Date(task.endDate!).toLocaleDateString("en-US", { 
+                        month: "short", 
+                        day: "numeric",
+                        year: "numeric"
+                      })}
                     </p>
                   </div>
-                  <Badge variant="outline">
-                    {event.day === today ? "Today" : `${event.day - today} days`}
+                  <Badge variant={task.priority === "critical" ? "destructive" : "outline"}>
+                    {getDaysUntil(task.endDate!)}
                   </Badge>
                 </div>
               ))}
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <TaskModal
+        open={taskModalOpen}
+        onOpenChange={setTaskModalOpen}
+        task={selectedTask}
+      />
     </div>
   );
 }

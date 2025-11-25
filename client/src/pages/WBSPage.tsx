@@ -255,7 +255,7 @@ export default function WBSPage() {
         </div>
       )}
 
-      <TaskModal open={taskModalOpen} onClose={() => setTaskModalOpen(false)} />
+      <TaskModal open={taskModalOpen} onOpenChange={setTaskModalOpen} />
     </div>
   );
 }

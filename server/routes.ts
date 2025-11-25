@@ -35,6 +35,7 @@ import {
   getAllDefaultTemplates,
   getAvailablePlaceholders
 } from "./emailService";
+import { wsManager } from "./websocket";
 
 // Helper to get user ID from request
 function getUserId(req: any): string {
@@ -251,6 +252,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: userId,
       });
       
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(task.projectId, "task-created", task, userId);
+      
       res.json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -275,6 +279,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = updateTaskSchema.parse(req.body);
       const updated = await storage.updateTask(id, data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(task.projectId, "task-updated", updated, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -298,6 +306,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.deleteTask(id);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(task.projectId, "task-deleted", { id, projectId: task.projectId }, userId);
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -354,6 +366,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const stakeholder = await storage.createStakeholder(data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-created", stakeholder, userId);
+      
       res.json(stakeholder);
     } catch (error) {
       console.error("Error creating stakeholder:", error);
@@ -378,6 +394,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = updateStakeholderSchema.parse(req.body);
       const updated = await storage.updateStakeholder(id, data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-updated", updated, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating stakeholder:", error);
@@ -401,6 +421,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.deleteStakeholder(id);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-deleted", { id, projectId: stakeholder.projectId }, userId);
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting stakeholder:", error);
@@ -445,6 +469,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const risk = await storage.createRisk(data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(risk.projectId, "risk-created", risk, userId);
+      
       res.json(risk);
     } catch (error) {
       console.error("Error creating risk:", error);
@@ -482,6 +510,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const updated = await storage.updateRisk(id, mergedData);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(existing.projectId, "risk-updated", updated, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating risk:", error);
@@ -505,6 +537,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.deleteRisk(id);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(risk.projectId, "risk-deleted", { id, projectId: risk.projectId }, userId);
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting risk:", error);
@@ -554,6 +590,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reportedBy: userId,
       });
       
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(issue.projectId, "issue-created", issue, userId);
+      
       res.json(issue);
     } catch (error) {
       console.error("Error creating issue:", error);
@@ -592,6 +631,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const updated = await storage.updateIssue(id, mergedData);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(existing.projectId, "issue-updated", updated, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating issue:", error);
@@ -615,6 +658,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.deleteIssue(id);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(issue.projectId, "issue-deleted", { id, projectId: issue.projectId }, userId);
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting issue:", error);
@@ -652,6 +699,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const cost = await storage.createCostItem(data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(cost.projectId, "cost-item-created", cost, userId);
+      
       res.json(cost);
     } catch (error) {
       console.error("Error creating cost item:", error);
@@ -676,6 +727,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = updateCostItemSchema.parse(req.body);
       const updated = await storage.updateCostItem(id, data);
+      
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(cost.projectId, "cost-item-updated", updated, userId);
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating cost item:", error);
@@ -1313,6 +1368,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WebSocket status endpoint
+  app.get('/api/ws/status', isAuthenticated, async (req: any, res) => {
+    res.json({
+      connectedUsers: wsManager.getConnectedUsers(),
+      timestamp: Date.now()
+    });
+  });
+
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server
+  wsManager.initialize(httpServer);
+  
   return httpServer;
 }

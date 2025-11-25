@@ -14,6 +14,52 @@ export const issuePriorityEnum = pgEnum("issue_priority", ["low", "medium", "hig
 export const changeRequestStatusEnum = pgEnum("change_request_status", ["submitted", "under-review", "approved", "rejected", "implemented"]);
 export const stakeholderRoleEnum = pgEnum("stakeholder_role", ["sponsor", "client", "team-member", "contractor", "consultant", "other"]);
 
+// EPC-Specific Enums
+export const disciplineEnum = pgEnum("discipline", [
+  "civil", "structural", "mechanical", "electrical", "piping", 
+  "instrumentation", "process", "hvac", "architectural", "general"
+]);
+export const constraintTypeEnum = pgEnum("constraint_type", [
+  "asap", "alap", "snet", "snlt", "fnet", "fnlt", "mso", "mfo"
+]); // As Soon/Late As Possible, Start/Finish No Earlier/Later Than, Must Start/Finish On
+export const riskResponseEnum = pgEnum("risk_response", ["avoid", "transfer", "mitigate", "accept", "escalate"]);
+export const riskCategoryEnum = pgEnum("risk_category", [
+  "technical", "external", "organizational", "project-management", 
+  "commercial", "hse", "quality", "schedule", "resource"
+]);
+export const issueTypeEnum = pgEnum("issue_type", [
+  "design", "procurement", "construction", "commissioning", 
+  "hse", "quality", "commercial", "interface", "resource"
+]);
+export const escalationLevelEnum = pgEnum("escalation_level", ["project", "program", "executive", "client"]);
+export const rootCauseCategoryEnum = pgEnum("root_cause_category", [
+  "design-error", "material-defect", "workmanship", "equipment-failure",
+  "communication", "planning", "external-factors", "unknown"
+]);
+export const stakeholderRoleEpcEnum = pgEnum("stakeholder_role_epc", [
+  "client-owner", "pmc", "feed-contractor", "epc-contractor", "epcm-contractor",
+  "subcontractor-civil", "subcontractor-mechanical", "subcontractor-electrical",
+  "equipment-vendor", "bulk-supplier", "tpi", "certification-body",
+  "regulatory-authority", "lenders-engineer", "insurance-surveyor", "consultant", "other"
+]);
+export const communicationPreferenceEnum = pgEnum("communication_preference", ["email", "phone", "meeting", "portal"]);
+export const authorityLevelEnum = pgEnum("authority_level", ["decision-maker", "influencer", "advisor", "informed"]);
+
+// Document Control Enums
+export const documentTypeEnum = pgEnum("document_type", [
+  "drawing", "specification", "datasheet", "procedure", "report", 
+  "calculation", "vendor-doc", "correspondence", "certificate", "other"
+]);
+export const documentStatusEnum = pgEnum("document_status", ["draft", "ifa", "ifc", "as-built", "superseded", "cancelled"]);
+export const transmittalStatusEnum = pgEnum("transmittal_status", ["issued", "acknowledged", "responded", "closed"]);
+export const rfiStatusEnum = pgEnum("rfi_status", ["open", "pending-response", "responded", "closed", "void"]);
+export const punchCategoryEnum = pgEnum("punch_category", ["a", "b", "c"]); // A=Safety/Critical, B=Required before handover, C=Minor
+export const punchStatusEnum = pgEnum("punch_status", ["open", "in-progress", "completed", "verified", "rejected"]);
+
+// Daily Report Enums
+export const weatherConditionEnum = pgEnum("weather_condition", ["clear", "cloudy", "rain", "storm", "wind", "hot", "cold"]);
+export const resourceTypeEnum = pgEnum("resource_type", ["human", "equipment", "material", "subcontractor"]);
+
 // Organizations (Multi-tenant root)
 export const organizations = pgTable("organizations", {
   id: serial("id").primaryKey(),
@@ -72,7 +118,7 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Tasks (WBS items with hierarchy support)
+// Tasks (WBS items with hierarchy support - EPC Enhanced)
 export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
@@ -89,6 +135,26 @@ export const tasks = pgTable("tasks", {
   progress: integer("progress").notNull().default(0), // 0-100
   assignedTo: varchar("assigned_to", { length: 255 }).references(() => users.id),
   createdBy: varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  // EPC-Specific Fields
+  discipline: disciplineEnum("discipline").default("general"),
+  areaCode: varchar("area_code", { length: 50 }), // Plant area/zone code
+  weightFactor: decimal("weight_factor", { precision: 5, scale: 4 }).default("0.0000"), // Progress weight (0.0000-1.0000)
+  physicalQuantity: decimal("physical_quantity", { precision: 15, scale: 2 }), // e.g., 500 meters
+  unitOfMeasure: varchar("unit_of_measure", { length: 20 }), // m, m², m³, kg, ea, lot
+  plannedQtyPeriod: decimal("planned_qty_period", { precision: 15, scale: 2 }), // Planned qty this period
+  actualQtyPeriod: decimal("actual_qty_period", { precision: 15, scale: 2 }), // Actual qty this period
+  cumulativeQty: decimal("cumulative_qty", { precision: 15, scale: 2 }), // Cumulative installed
+  constraintType: constraintTypeEnum("constraint_type").default("asap"),
+  constraintDate: timestamp("constraint_date"), // Date for constraint if applicable
+  baselineStart: timestamp("baseline_start"), // Original planned start
+  baselineFinish: timestamp("baseline_finish"), // Original planned finish
+  baselineCost: decimal("baseline_cost", { precision: 15, scale: 2 }), // Original budget
+  actualCost: decimal("actual_cost", { precision: 15, scale: 2 }), // Actual cost to date
+  earnedValue: decimal("earned_value", { precision: 15, scale: 2 }), // Earned value
+  responsibleContractor: text("responsible_contractor"), // Subcontractor name
+  float: integer("float"), // Float days (calculated)
+  isMilestone: boolean("is_milestone").default(false),
+  isCriticalPath: boolean("is_critical_path").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -104,7 +170,7 @@ export const taskDependencies = pgTable("task_dependencies", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Stakeholders
+// Stakeholders (EPC Enhanced)
 export const stakeholders = pgTable("stakeholders", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
@@ -113,6 +179,12 @@ export const stakeholders = pgTable("stakeholders", {
   phone: text("phone"),
   organization: text("organization"),
   role: stakeholderRoleEnum("role").notNull().default("other"),
+  // EPC-Specific Fields
+  roleEpc: stakeholderRoleEpcEnum("role_epc").default("other"), // Detailed EPC role
+  communicationPreference: communicationPreferenceEnum("communication_preference").default("email"),
+  authorityLevel: authorityLevelEnum("authority_level").default("informed"),
+  contractReference: varchar("contract_reference", { length: 100 }), // Contract/PO number
+  discipline: disciplineEnum("discipline"), // Primary discipline responsibility
   influence: integer("influence").notNull().default(3), // 1-5 scale
   interest: integer("interest").notNull().default(3), // 1-5 scale
   notes: text("notes"),
@@ -120,19 +192,32 @@ export const stakeholders = pgTable("stakeholders", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Risks
+// Risks (EPC Enhanced)
 export const risks = pgTable("risks", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   code: varchar("code", { length: 50 }).notNull(),
   title: text("title").notNull(),
   description: text("description"),
-  category: text("category"), // technical, financial, schedule, resource, etc.
+  category: text("category"), // Keep for backward compat
+  categoryEpc: riskCategoryEnum("category_epc").default("technical"), // EPC category
   status: riskStatusEnum("status").notNull().default("identified"),
   probability: integer("probability").notNull().default(3), // 1-5 scale
   impact: riskImpactEnum("impact").notNull().default("medium"),
   mitigationPlan: text("mitigation_plan"),
   owner: varchar("owner", { length: 255 }).references(() => users.id),
+  // EPC-Specific Fields
+  responseStrategy: riskResponseEnum("response_strategy").default("mitigate"),
+  costImpact: decimal("cost_impact", { precision: 15, scale: 2 }), // $ impact if risk occurs
+  scheduleImpact: integer("schedule_impact"), // Days delay if risk occurs
+  riskExposure: decimal("risk_exposure", { precision: 15, scale: 2 }), // P × I × Cost (calculated)
+  triggerEvents: text("trigger_events"), // Conditions that activate risk
+  contingencyReserve: decimal("contingency_reserve", { precision: 15, scale: 2 }), // $ allocated
+  secondaryRisks: text("secondary_risks"), // Risks from mitigation
+  residualProbability: integer("residual_probability"), // 1-5 after mitigation
+  residualImpact: riskImpactEnum("residual_impact"), // After mitigation
+  reviewDate: timestamp("review_date"), // Next review date
+  discipline: disciplineEnum("discipline"), // Related discipline
   identifiedDate: timestamp("identified_date").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -140,7 +225,7 @@ export const risks = pgTable("risks", {
   uniqueCodePerProject: unique("risks_project_code_unique").on(table.projectId, table.code),
 }));
 
-// Issues
+// Issues (EPC Enhanced)
 export const issues = pgTable("issues", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
@@ -149,7 +234,24 @@ export const issues = pgTable("issues", {
   description: text("description"),
   status: issueStatusEnum("status").notNull().default("open"),
   priority: issuePriorityEnum("priority").notNull().default("medium"),
-  category: text("category"),
+  category: text("category"), // Keep for backward compat
+  // EPC-Specific Fields
+  issueType: issueTypeEnum("issue_type").default("design"),
+  impactCost: boolean("impact_cost").default(false),
+  impactSchedule: boolean("impact_schedule").default(false),
+  impactQuality: boolean("impact_quality").default(false),
+  impactSafety: boolean("impact_safety").default(false),
+  rootCauseCategory: rootCauseCategoryEnum("root_cause_category"),
+  rootCauseAnalysis: text("root_cause_analysis"), // 5 Whys result
+  lessonsLearnedRef: varchar("lessons_learned_ref", { length: 100 }),
+  relatedChangeRequest: integer("related_change_request").references(() => changeRequests.id),
+  escalationLevel: escalationLevelEnum("escalation_level").default("project"),
+  targetResolutionDate: timestamp("target_resolution_date"),
+  verificationRequired: boolean("verification_required").default(false),
+  verifiedBy: varchar("verified_by", { length: 255 }).references(() => users.id),
+  verifiedDate: timestamp("verified_date"),
+  discipline: disciplineEnum("discipline"),
+  areaCode: varchar("area_code", { length: 50 }),
   assignedTo: varchar("assigned_to", { length: 255 }).references(() => users.id),
   reportedBy: varchar("reported_by", { length: 255 }).notNull().references(() => users.id),
   reportedDate: timestamp("reported_date").defaultNow().notNull(),
@@ -215,6 +317,179 @@ export const resourceAssignments = pgTable("resource_assignments", {
   taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   resourceId: integer("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
   allocation: integer("allocation").notNull().default(100), // percentage
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ==================== EPC Document Control ====================
+
+// Documents (Document Register)
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  documentNumber: varchar("document_number", { length: 100 }).notNull(), // PRJ-DIS-AREA-TYPE-SEQ
+  title: text("title").notNull(),
+  description: text("description"),
+  discipline: disciplineEnum("discipline").default("general"),
+  documentType: documentTypeEnum("document_type").notNull().default("drawing"),
+  revision: varchar("revision", { length: 10 }).notNull().default("0"), // A, B, 0, 1, 2...
+  status: documentStatusEnum("status").notNull().default("draft"),
+  areaCode: varchar("area_code", { length: 50 }),
+  equipmentTag: varchar("equipment_tag", { length: 100 }), // Related equipment
+  originator: varchar("originator", { length: 255 }).references(() => users.id),
+  checker: varchar("checker", { length: 255 }).references(() => users.id),
+  approver: varchar("approver", { length: 255 }).references(() => users.id),
+  supersedesDocId: integer("supersedes_doc_id"), // Previous revision
+  requiredDate: timestamp("required_date"),
+  forecastDate: timestamp("forecast_date"),
+  actualDate: timestamp("actual_date"),
+  filePath: text("file_path"), // Storage path
+  fileSize: integer("file_size"), // bytes
+  reviewComments: text("review_comments"),
+  createdBy: varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueDocPerProject: unique("documents_project_number_unique").on(table.projectId, table.documentNumber, table.revision),
+}));
+
+// Transmittals
+export const transmittals = pgTable("transmittals", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  transmittalNumber: varchar("transmittal_number", { length: 50 }).notNull(),
+  subject: text("subject").notNull(),
+  fromOrganization: text("from_organization").notNull(),
+  toOrganization: text("to_organization").notNull(),
+  attention: text("attention"), // Person's name
+  issueDate: timestamp("issue_date").defaultNow().notNull(),
+  responseRequired: boolean("response_required").default(false),
+  responseRequiredDate: timestamp("response_required_date"),
+  responseReceivedDate: timestamp("response_received_date"),
+  status: transmittalStatusEnum("status").notNull().default("issued"),
+  purpose: text("purpose"), // For Review, For Approval, For Information, etc.
+  remarks: text("remarks"),
+  createdBy: varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueTransmittalPerProject: unique("transmittals_project_number_unique").on(table.projectId, table.transmittalNumber),
+}));
+
+// Transmittal Documents (junction table)
+export const transmittalDocuments = pgTable("transmittal_documents", {
+  id: serial("id").primaryKey(),
+  transmittalId: integer("transmittal_id").notNull().references(() => transmittals.id, { onDelete: "cascade" }),
+  documentId: integer("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  copies: integer("copies").default(1),
+  purpose: text("purpose"), // For Review, For Approval, For Construction
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// RFIs (Request for Information)
+export const rfis = pgTable("rfis", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  rfiNumber: varchar("rfi_number", { length: 50 }).notNull(),
+  subject: text("subject").notNull(),
+  discipline: disciplineEnum("discipline").default("general"),
+  fromOrganization: text("from_organization").notNull(),
+  toOrganization: text("to_organization").notNull(),
+  question: text("question").notNull(),
+  response: text("response"),
+  priority: issuePriorityEnum("priority").notNull().default("medium"),
+  status: rfiStatusEnum("status").notNull().default("open"),
+  requiredDate: timestamp("required_date"),
+  responseDate: timestamp("response_date"),
+  costImpact: boolean("cost_impact").default(false),
+  scheduleImpact: boolean("schedule_impact").default(false),
+  relatedDocuments: text("related_documents"), // Comma-separated doc numbers
+  areaCode: varchar("area_code", { length: 50 }),
+  submittedBy: varchar("submitted_by", { length: 255 }).notNull().references(() => users.id),
+  respondedBy: varchar("responded_by", { length: 255 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueRfiPerProject: unique("rfis_project_number_unique").on(table.projectId, table.rfiNumber),
+}));
+
+// Punch Items (Punch List / Snag List)
+export const punchItems = pgTable("punch_items", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  code: varchar("code", { length: 50 }).notNull(),
+  system: text("system").notNull(), // Mechanical, Electrical, etc.
+  areaCode: varchar("area_code", { length: 50 }),
+  discipline: disciplineEnum("discipline").default("general"),
+  description: text("description").notNull(),
+  category: punchCategoryEnum("category").notNull().default("b"), // A, B, C
+  status: punchStatusEnum("status").notNull().default("open"),
+  priority: issuePriorityEnum("priority").notNull().default("medium"),
+  assignedTo: varchar("assigned_to", { length: 255 }).references(() => users.id),
+  responsibleContractor: text("responsible_contractor"),
+  targetDate: timestamp("target_date"),
+  completedDate: timestamp("completed_date"),
+  verifiedBy: varchar("verified_by", { length: 255 }).references(() => users.id),
+  verifiedDate: timestamp("verified_date"),
+  remarks: text("remarks"),
+  photoPath: text("photo_path"), // Before/after photos
+  createdBy: varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniquePunchPerProject: unique("punch_items_project_code_unique").on(table.projectId, table.code),
+}));
+
+// ==================== Daily Progress Reporting ====================
+
+// Daily Reports
+export const dailyReports = pgTable("daily_reports", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  reportDate: timestamp("report_date").notNull(),
+  weatherCondition: weatherConditionEnum("weather_condition").default("clear"),
+  weatherNotes: text("weather_notes"),
+  temperature: integer("temperature"), // Celsius
+  workableHours: decimal("workable_hours", { precision: 4, scale: 1 }), // e.g., 8.5
+  activitiesCompleted: text("activities_completed"),
+  activitiesPlanned: text("activities_planned"), // For next day
+  issuesEncountered: text("issues_encountered"),
+  safetyObservations: text("safety_observations"),
+  qualityObservations: text("quality_observations"),
+  visitorLog: text("visitor_log"),
+  remarks: text("remarks"),
+  submittedBy: varchar("submitted_by", { length: 255 }).notNull().references(() => users.id),
+  approvedBy: varchar("approved_by", { length: 255 }).references(() => users.id),
+  approvedDate: timestamp("approved_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueReportPerProjectDate: unique("daily_reports_project_date_unique").on(table.projectId, table.reportDate),
+}));
+
+// Daily Manpower (linked to daily reports)
+export const dailyManpower = pgTable("daily_manpower", {
+  id: serial("id").primaryKey(),
+  dailyReportId: integer("daily_report_id").notNull().references(() => dailyReports.id, { onDelete: "cascade" }),
+  trade: text("trade").notNull(), // Electrician, Welder, Pipefitter, etc.
+  contractor: text("contractor"),
+  plannedCount: integer("planned_count").default(0),
+  actualCount: integer("actual_count").default(0),
+  hoursWorked: decimal("hours_worked", { precision: 5, scale: 1 }),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Daily Equipment (linked to daily reports)
+export const dailyEquipment = pgTable("daily_equipment", {
+  id: serial("id").primaryKey(),
+  dailyReportId: integer("daily_report_id").notNull().references(() => dailyReports.id, { onDelete: "cascade" }),
+  equipmentType: text("equipment_type").notNull(), // Crane, Excavator, etc.
+  equipmentId: varchar("equipment_id", { length: 50 }), // ID/tag number
+  contractor: text("contractor"),
+  plannedHours: decimal("planned_hours", { precision: 5, scale: 1 }),
+  actualHours: decimal("actual_hours", { precision: 5, scale: 1 }),
+  status: text("status"), // Working, Standby, Breakdown
+  remarks: text("remarks"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -641,3 +916,73 @@ export const selectCloudSyncedFileSchema = createSelectSchema(cloudSyncedFiles);
 export type InsertCloudSyncedFile = z.infer<typeof insertCloudSyncedFileSchema>;
 export type UpdateCloudSyncedFile = z.infer<typeof updateCloudSyncedFileSchema>;
 export type CloudSyncedFile = typeof cloudSyncedFiles.$inferSelect;
+
+// ==================== EPC Document Control Zod Schemas ====================
+
+// Zod Schemas for Documents
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true });
+export const updateDocumentSchema = insertDocumentSchema.partial();
+export const selectDocumentSchema = createSelectSchema(documents);
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type UpdateDocument = z.infer<typeof updateDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+
+// Zod Schemas for Transmittals
+export const insertTransmittalSchema = createInsertSchema(transmittals).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true });
+export const updateTransmittalSchema = insertTransmittalSchema.partial();
+export const selectTransmittalSchema = createSelectSchema(transmittals);
+export type InsertTransmittal = z.infer<typeof insertTransmittalSchema>;
+export type UpdateTransmittal = z.infer<typeof updateTransmittalSchema>;
+export type Transmittal = typeof transmittals.$inferSelect;
+
+// Zod Schemas for Transmittal Documents
+export const insertTransmittalDocumentSchema = createInsertSchema(transmittalDocuments).omit({ id: true, createdAt: true });
+export const selectTransmittalDocumentSchema = createSelectSchema(transmittalDocuments);
+export type InsertTransmittalDocument = z.infer<typeof insertTransmittalDocumentSchema>;
+export type TransmittalDocument = typeof transmittalDocuments.$inferSelect;
+
+// Zod Schemas for RFIs
+export const insertRfiSchema = createInsertSchema(rfis).omit({ id: true, createdAt: true, updatedAt: true, submittedBy: true }).extend({
+  rfiNumber: z.string().optional(), // Auto-generated if not provided
+});
+export const updateRfiSchema = insertRfiSchema.partial();
+export const selectRfiSchema = createSelectSchema(rfis);
+export type InsertRfi = z.infer<typeof insertRfiSchema>;
+export type UpdateRfi = z.infer<typeof updateRfiSchema>;
+export type Rfi = typeof rfis.$inferSelect;
+
+// Zod Schemas for Punch Items
+export const insertPunchItemSchema = createInsertSchema(punchItems).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true, code: true }).extend({
+  code: z.string().optional(), // Auto-generated if not provided
+});
+export const updatePunchItemSchema = insertPunchItemSchema.partial();
+export const selectPunchItemSchema = createSelectSchema(punchItems);
+export type InsertPunchItem = z.infer<typeof insertPunchItemSchema>;
+export type UpdatePunchItem = z.infer<typeof updatePunchItemSchema>;
+export type PunchItem = typeof punchItems.$inferSelect;
+
+// ==================== Daily Progress Reporting Zod Schemas ====================
+
+// Zod Schemas for Daily Reports
+export const insertDailyReportSchema = createInsertSchema(dailyReports).omit({ id: true, createdAt: true, updatedAt: true, submittedBy: true });
+export const updateDailyReportSchema = insertDailyReportSchema.partial();
+export const selectDailyReportSchema = createSelectSchema(dailyReports);
+export type InsertDailyReport = z.infer<typeof insertDailyReportSchema>;
+export type UpdateDailyReport = z.infer<typeof updateDailyReportSchema>;
+export type DailyReport = typeof dailyReports.$inferSelect;
+
+// Zod Schemas for Daily Manpower
+export const insertDailyManpowerSchema = createInsertSchema(dailyManpower).omit({ id: true, createdAt: true });
+export const updateDailyManpowerSchema = insertDailyManpowerSchema.partial();
+export const selectDailyManpowerSchema = createSelectSchema(dailyManpower);
+export type InsertDailyManpower = z.infer<typeof insertDailyManpowerSchema>;
+export type UpdateDailyManpower = z.infer<typeof updateDailyManpowerSchema>;
+export type DailyManpower = typeof dailyManpower.$inferSelect;
+
+// Zod Schemas for Daily Equipment
+export const insertDailyEquipmentSchema = createInsertSchema(dailyEquipment).omit({ id: true, createdAt: true });
+export const updateDailyEquipmentSchema = insertDailyEquipmentSchema.partial();
+export const selectDailyEquipmentSchema = createSelectSchema(dailyEquipment);
+export type InsertDailyEquipment = z.infer<typeof insertDailyEquipmentSchema>;
+export type UpdateDailyEquipment = z.infer<typeof updateDailyEquipmentSchema>;
+export type DailyEquipment = typeof dailyEquipment.$inferSelect;

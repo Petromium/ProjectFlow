@@ -1,0 +1,274 @@
+{
+  "version": "1.0",
+  "project": {
+    "name": "Highland Ridge 120MW Wind Farm",
+    "code": "WIND-2025-004",
+    "description": "EPC for a 120MW wind energy facility comprising 30 x 4MW turbines. Scope includes 15km access roads, 33/132kV substation, and transmission line tie-in.",
+    "status": "active",
+    "startDate": "2025-01-10T00:00:00.000Z",
+    "endDate": "2026-08-15T00:00:00.000Z",
+    "budget": "185000000.00",
+    "currency": "USD"
+  },
+  "tasks": [
+    {
+      "wbsCode": "1",
+      "name": "Project Management & Permitting",
+      "description": "Overall project administration, HSE management, and regulatory compliance",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 70,
+      "startDate": "2025-01-10T00:00:00.000Z",
+      "endDate": "2026-08-15T00:00:00.000Z",
+      "assignedTo": "PM-01",
+      "estimatedHours": "8500.00",
+      "actualHours": "4200.00",
+      "discipline": "management"
+    },
+    {
+      "wbsCode": "2",
+      "name": "Engineering",
+      "description": "Geotechnical, Civil, Electrical, and Mechanical engineering design",
+      "status": "completed",
+      "priority": "critical",
+      "progress": 100,
+      "startDate": "2025-01-15T00:00:00.000Z",
+      "endDate": "2025-06-30T00:00:00.000Z",
+      "assignedTo": "ENG-LEAD",
+      "estimatedHours": "12000.00",
+      "actualHours": "12450.00",
+      "discipline": "engineering"
+    },
+    {
+      "wbsCode": "2.1",
+      "name": "Micro-siting & Optimization",
+      "description": "Final turbine positioning based on wind data and terrain",
+      "status": "completed",
+      "priority": "critical",
+      "progress": 100,
+      "startDate": "2025-01-15T00:00:00.000Z",
+      "endDate": "2025-02-28T00:00:00.000Z",
+      "assignedTo": "ENG-CIVIL",
+      "estimatedHours": "600.00",
+      "actualHours": "580.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "3",
+      "name": "Procurement & Logistics",
+      "description": "Sourcing of WTGs, BOP materials, and heavy transport logistics",
+      "status": "in-progress",
+      "priority": "critical",
+      "progress": 85,
+      "startDate": "2025-02-01T00:00:00.000Z",
+      "endDate": "2026-03-30T00:00:00.000Z",
+      "assignedTo": "PROC-MGR",
+      "estimatedHours": "4000.00",
+      "actualHours": "3100.00",
+      "discipline": "procurement"
+    },
+    {
+      "wbsCode": "4",
+      "name": "Construction Works",
+      "description": "Civil, Electrical, and Mechanical installation works",
+      "status": "in-progress",
+      "priority": "critical",
+      "progress": 45,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2026-07-30T00:00:00.000Z",
+      "assignedTo": "CONST-DIR",
+      "estimatedHours": "150000.00",
+      "actualHours": "65000.00",
+      "discipline": "construction"
+    },
+    {
+      "wbsCode": "4.1",
+      "name": "Civil Infrastructure",
+      "description": "Roads, crane pads, and foundations",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 60,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2026-01-30T00:00:00.000Z",
+      "assignedTo": "CONST-CIVIL",
+      "estimatedHours": "60000.00",
+      "actualHours": "42000.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "4.1.1",
+      "name": "Access Roads & Hardstands",
+      "description": "Construction of 15km site roads and 30 crane pads",
+      "status": "completed",
+      "priority": "critical",
+      "progress": 100,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2025-09-30T00:00:00.000Z",
+      "assignedTo": "SUP-ROADS",
+      "estimatedHours": "15000.00",
+      "actualHours": "16200.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "4.1.2",
+      "name": "WTG Foundations",
+      "description": "Gravity base foundations for 30 turbines",
+      "status": "in-progress",
+      "priority": "critical",
+      "progress": 55,
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "endDate": "2026-01-30T00:00:00.000Z",
+      "assignedTo": "SUP-CONCRETE",
+      "estimatedHours": "35000.00",
+      "actualHours": "20000.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "4.1.2.1",
+      "name": "Sector North Foundations (WTG 01-10)",
+      "description": "Foundations for WTG-01 to WTG-10",
+      "status": "completed",
+      "priority": "high",
+      "progress": 100,
+      "startDate": "2025-07-01T00:00:00.000Z",
+      "endDate": "2025-10-30T00:00:00.000Z",
+      "assignedTo": "FOREMAN-A",
+      "estimatedHours": "12000.00",
+      "actualHours": "11500.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "4.1.2.2",
+      "name": "Sector Central Foundations (WTG 11-20)",
+      "description": "Foundations for WTG-11 to WTG-20",
+      "status": "in-progress",
+      "priority": "critical",
+      "progress": 65,
+      "startDate": "2025-09-15T00:00:00.000Z",
+      "endDate": "2026-01-15T00:00:00.000Z",
+      "assignedTo": "FOREMAN-B",
+      "estimatedHours": "12000.00",
+      "actualHours": "7800.00",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "4.2",
+      "name": "Turbine Erection",
+      "description": "Lifting of Towers, Nacelles, and Rotors",
+      "status": "not-started",
+      "priority": "critical",
+      "progress": 0,
+      "startDate": "2026-01-15T00:00:00.000Z",
+      "endDate": "2026-06-30T00:00:00.000Z",
+      "assignedTo": "LIFTING-SUP",
+      "estimatedHours": "45000.00",
+      "actualHours": "0.00",
+      "discipline": "mechanical"
+    }
+  ],
+  "risks": [
+    {
+      "code": "RISK-W-001",
+      "title": "High Wind Downtime",
+      "description": "Wind speeds exceeding 12m/s at hub height will stop crane lifts. Historical data suggests 20% downtime in Q1.",
+      "category": "environmental",
+      "probability": 5,
+      "impact": "critical",
+      "status": "assessed",
+      "owner": "CONST-DIR",
+      "mitigationPlan": "Schedule critical lifts for early morning windows; mobilize secondary crane."
+    },
+    {
+      "code": "RISK-W-002",
+      "title": "Blade Transport Route Permits",
+      "description": "Bridge structural assessment on County Rd 42 pending. May require temporary bridge reinforcement.",
+      "category": "logistics",
+      "probability": 4,
+      "impact": "high",
+      "status": "mitigating",
+      "owner": "LOGISTICS-COORD",
+      "mitigationPlan": "Engineering firm hired for rapid assessment; alternate route simulation in progress."
+    }
+  ],
+  "issues": [
+    {
+      "code": "ISS-W-001",
+      "title": "WTG-08 Anchor Cage Bolt Damage",
+      "description": "During delivery, thread damage observed on 4 anchor bolts for WTG-08 foundation cage.",
+      "priority": "high",
+      "status": "open",
+      "assignedTo": "QA-MGR",
+      "reportedBy": "SITE-INSPEC",
+      "resolution": null
+    },
+    {
+      "code": "ISS-W-002",
+      "title": "Batch Plant Breakdown",
+      "description": "On-site concrete batch plant motor failure caused 2-day delay in Sector Central pours.",
+      "priority": "critical",
+      "status": "resolved",
+      "assignedTo": "SUP-CONCRETE",
+      "reportedBy": "FOREMAN-B",
+      "resolution": "Backup motor installed; night shift authorized to recover schedule."
+    }
+  ],
+  "stakeholders": [
+    {
+      "name": "Highland Regional Council",
+      "role": "regulatory",
+      "organization": "Government",
+      "email": "planning@highland.gov",
+      "phone": "+1-555-9988",
+      "influence": 5,
+      "interest": 4
+    },
+    {
+      "name": "NordicWind Power Systems",
+      "role": "vendor",
+      "organization": "OEM Supplier",
+      "email": "projects@nordicwind.com",
+      "phone": "+1-555-7766",
+      "influence": 4,
+      "interest": 5
+    },
+    {
+      "name": "Global Renewables Fund",
+      "role": "sponsor",
+      "organization": "Financier",
+      "email": "invest@globalrenewables.com",
+      "phone": "+1-555-1122",
+      "influence": 5,
+      "interest": 5
+    }
+  ],
+  "costItems": [
+    {
+      "description": "Wind Turbine Supply Contract (30 Units)",
+      "category": "equipment",
+      "budgeted": "105000000.00",
+      "actual": "45000000.00",
+      "currency": "USD"
+    },
+    {
+      "description": "Civil Works (Roads & Foundations)",
+      "category": "construction",
+      "budgeted": "35000000.00",
+      "actual": "22000000.00",
+      "currency": "USD"
+    },
+    {
+      "description": "Main Crane Rental (600T Crawler)",
+      "category": "equipment",
+      "budgeted": "8000000.00",
+      "actual": "500000.00",
+      "currency": "USD"
+    },
+    {
+      "description": "Land Lease Payments",
+      "category": "administrative",
+      "budgeted": "2000000.00",
+      "actual": "1200000.00",
+      "currency": "USD"
+    }
+  ]
+}

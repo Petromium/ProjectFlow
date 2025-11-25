@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useProject } from "@/contexts/ProjectContext";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, TrendingUp, AlertTriangle, Clock, DollarSign, FolderKanban } from "lucide-react";
+import { BarChart3, TrendingUp, AlertTriangle, Clock, DollarSign, FolderKanban, Activity } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { Task, Risk, Issue, CostItem } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SCurveChart, PerformanceGauges, DisciplineProgress, RiskExposureSummary } from "@/components/epc";
+import type { Task, Risk, Issue, CostItem, Project } from "@shared/schema";
 
 interface WBSItem {
   code: string;
@@ -237,13 +239,18 @@ export default function Dashboard() {
     .filter(t => t.status !== 'completed' && (t.priority === 'critical' || t.priority === 'high'))
     .slice(0, 4);
 
+  const projectStartDate = selectedProject?.startDate ? new Date(selectedProject.startDate) : new Date();
+  const projectEndDate = selectedProject?.endDate ? new Date(selectedProject.endDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
   return (
     <div className="p-3 md:p-6 space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-3xl font-semibold mb-1 md:mb-2" data-testid="text-dashboard-title">Project Overview</h1>
-        <p className="text-sm md:text-base text-muted-foreground" data-testid="text-project-name">
-          {selectedProject.name} - {selectedProject.code}
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-xl md:text-3xl font-semibold mb-1 md:mb-2" data-testid="text-dashboard-title">Project Dashboard</h1>
+          <p className="text-sm md:text-base text-muted-foreground" data-testid="text-project-name">
+            {selectedProject.name} - {selectedProject.code}
+          </p>
+        </div>
       </div>
 
       {isLoading ? (
@@ -286,7 +293,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="eva" data-testid="tab-eva">
+            <Activity className="h-4 w-4 mr-2" />
+            S-Curve & EVA
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4 mt-4">
+          <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Work Breakdown Progress</CardTitle>
@@ -355,48 +372,74 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-      </div>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Critical & High Priority Tasks</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12" />
-              <Skeleton className="h-12" />
-              <Skeleton className="h-12" />
-            </div>
-          ) : criticalTasks.length > 0 ? (
-            <div className="space-y-3">
-              {criticalTasks.map((task) => (
-                <div key={task.id} className="flex items-center gap-4 flex-wrap" data-testid={`critical-task-${task.id}`}>
-                  <Badge variant="outline" className="font-mono">{task.wbsCode}</Badge>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                      <span className="text-sm font-medium truncate">{task.name}</span>
-                      <Badge 
-                        variant={task.priority === 'critical' ? 'destructive' : 'secondary'}
-                      >
-                        {task.status === 'not-started' ? 'Not Started' : 
-                         task.status === 'in-progress' ? 'In Progress' : 
-                         task.status}
-                      </Badge>
-                    </div>
-                    <Progress value={task.progress} className="h-1.5" />
-                  </div>
-                  <span className="text-sm text-muted-foreground w-12 text-right">{task.progress}%</span>
+          <Card>
+            <CardHeader>
+              <CardTitle>Critical & High Priority Tasks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-12" />
+                  <Skeleton className="h-12" />
+                  <Skeleton className="h-12" />
                 </div>
-              ))}
+              ) : criticalTasks.length > 0 ? (
+                <div className="space-y-3">
+                  {criticalTasks.map((task) => (
+                    <div key={task.id} className="flex items-center gap-4 flex-wrap" data-testid={`critical-task-${task.id}`}>
+                      <Badge variant="outline" className="font-mono">{task.wbsCode}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-medium truncate">{task.name}</span>
+                          <Badge 
+                            variant={task.priority === 'critical' ? 'destructive' : 'secondary'}
+                          >
+                            {task.status === 'not-started' ? 'Not Started' : 
+                             task.status === 'in-progress' ? 'In Progress' : 
+                             task.status}
+                          </Badge>
+                        </div>
+                        <Progress value={task.progress} className="h-1.5" />
+                      </div>
+                      <span className="text-sm text-muted-foreground w-12 text-right">{task.progress}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No critical or high priority tasks pending.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="eva" className="space-y-4 mt-4">
+          {isLoading ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Skeleton className="h-[400px]" />
+              <Skeleton className="h-[400px]" />
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No critical or high priority tasks pending.
-            </p>
+            <>
+              <SCurveChart 
+                tasks={tasks} 
+                projectStartDate={projectStartDate}
+                projectEndDate={projectEndDate}
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <PerformanceGauges tasks={tasks} costItems={costItems} />
+                <DisciplineProgress tasks={tasks} />
+              </div>
+
+              <RiskExposureSummary risks={risks} totalBudget={stats.totalBudget} />
+            </>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

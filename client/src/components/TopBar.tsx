@@ -119,59 +119,61 @@ export function TopBar() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" data-testid="button-import-export">
-            <Download className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Import / Export</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-import-json">Import JSON</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-import-csv">Import CSV</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-export-pdf">Export as PDF</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-export-json">Export as JSON</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-export-csv">Export as CSV</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-2 ml-auto">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" data-testid="button-import-export">
+              <Download className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Import / Export</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="menu-item-import-json">Import JSON</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-item-import-csv">Import CSV</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="menu-item-export-pdf">Export as PDF</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-item-export-json">Export as JSON</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-item-export-csv">Export as CSV</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleTheme}
-        data-testid="button-theme-toggle"
-      >
-        {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          data-testid="button-theme-toggle"
+        >
+          {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+        </Button>
 
-      <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-        <Bell className="h-4 w-4" />
-        <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs" data-testid="badge-notification-count">
-          3
-        </Badge>
-      </Button>
+        <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+          <Bell className="h-4 w-4" />
+          <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs" data-testid="badge-notification-count">
+            3
+          </Badge>
+        </Button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" data-testid="button-profile">
-            <User className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>
-            {user?.firstName} {user?.lastName}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-profile">Profile</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-settings">Settings</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleLogout} data-testid="menu-item-logout">
-            Logout
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" data-testid="button-profile">
+              <User className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>
+              {user?.firstName} {user?.lastName}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="menu-item-profile">Profile</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-item-settings">Settings</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} data-testid="menu-item-logout">
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }

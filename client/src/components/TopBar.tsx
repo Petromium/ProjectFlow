@@ -68,20 +68,20 @@ export function TopBar() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; message: string; errors?: string[]; warnings?: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [notifications, setNotifications] = useState<Notification[]>([
     { id: 1, title: "Task Assigned", message: "You've been assigned to 'Site Preparation'", type: "info", time: "2 hours ago", read: false },
     { id: 2, title: "Risk Alert", message: "High risk 'Weather Delays' requires attention", type: "warning", time: "5 hours ago", read: false },
     { id: 3, title: "Issue Resolved", message: "Issue 'Permit Delay' has been closed", type: "success", time: "1 day ago", read: false },
   ]);
-  
+
   const unreadCount = notifications.filter(n => !n.read).length;
-  
+
   const markAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     toast({ title: "Notifications marked as read" });
   };
-  
+
   const markAsRead = (id: number) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
@@ -98,8 +98,10 @@ export function TopBar() {
     projectsError,
   } = useProject();
 
+  const { logout } = useAuth();
+
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    logout();
   };
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId);
@@ -231,20 +233,20 @@ export function TopBar() {
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !selectedProjectId) return;
-    
+
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      
+
       const response = await fetch(`/api/projects/${selectedProjectId}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(data)
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         setImportResult({
           success: true,
@@ -269,7 +271,7 @@ export function TopBar() {
       });
       toast({ title: "Error", description: "Failed to import project data", variant: "destructive" });
     }
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -278,7 +280,7 @@ export function TopBar() {
   return (
     <header className="flex h-14 md:h-16 items-center gap-2 md:gap-4 border-b bg-background px-2 md:px-4">
       <SidebarTrigger data-testid="button-sidebar-toggle" />
-      
+
       {/* Mobile: Sheet-based selector */}
       <Sheet>
         <SheetTrigger asChild className="md:hidden">
@@ -305,8 +307,8 @@ export function TopBar() {
                 <SelectTrigger data-testid="trigger-organization-mobile">
                   <SelectValue placeholder={
                     orgsError ? "Error" :
-                    isLoadingOrgs ? "Loading..." :
-                    "Select Organization"
+                      isLoadingOrgs ? "Loading..." :
+                        "Select Organization"
                   } />
                 </SelectTrigger>
                 <SelectContent>
@@ -331,8 +333,8 @@ export function TopBar() {
                 <SelectTrigger data-testid="trigger-project-mobile">
                   <SelectValue placeholder={
                     projectsError ? "Error" :
-                    isLoadingProjects ? "Loading..." :
-                    "Select Project"
+                      isLoadingProjects ? "Loading..." :
+                        "Select Project"
                   } />
                 </SelectTrigger>
                 <SelectContent>
@@ -358,8 +360,8 @@ export function TopBar() {
         <SelectTrigger className="hidden md:flex w-48" data-testid="trigger-organization">
           <SelectValue placeholder={
             orgsError ? "Error loading orgs" :
-            isLoadingOrgs ? "Loading..." :
-            "Select Organization"
+              isLoadingOrgs ? "Loading..." :
+                "Select Organization"
           } />
         </SelectTrigger>
         <SelectContent>
@@ -380,8 +382,8 @@ export function TopBar() {
         <SelectTrigger className="hidden md:flex w-56" data-testid="trigger-project">
           <SelectValue placeholder={
             projectsError ? "Error loading projects" :
-            isLoadingProjects ? "Loading..." :
-            "Select Project"
+              isLoadingProjects ? "Loading..." :
+                "Select Project"
           } />
         </SelectTrigger>
         <SelectContent>
@@ -473,7 +475,7 @@ export function TopBar() {
         className="hidden"
         data-testid="input-import-file"
       />
-      
+
       <div className="flex items-center gap-1 md:gap-2 ml-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -557,10 +559,9 @@ export function TopBar() {
                       data-testid={`notification-item-${notification.id}`}
                     >
                       <div className="flex items-start gap-2">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                          notification.type === 'warning' ? 'bg-amber-500' :
-                          notification.type === 'success' ? 'bg-green-500' : 'bg-blue-500'
-                        }`} />
+                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${notification.type === 'warning' ? 'bg-amber-500' :
+                            notification.type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+                          }`} />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm">{notification.title}</p>
                           <p className="text-xs text-muted-foreground truncate">{notification.message}</p>
@@ -632,7 +633,7 @@ export function TopBar() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="border rounded-lg p-4 space-y-3">
                 <h4 className="font-medium text-sm flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
@@ -650,7 +651,7 @@ export function TopBar() {
                   ))}
                 </div>
               </div>
-              
+
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => setProfileOpen(false)} data-testid="button-close-profile">
                   Close

@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import {
   insertOrganizationSchema,
   insertProjectSchema,
@@ -43,7 +43,7 @@ import { wsManager } from "./websocket";
 
 // Helper to get user ID from request
 function getUserId(req: any): string {
-  return req.user.claims.sub;
+  return req.user.id;
 }
 
 // Helper to check if user has access to organization

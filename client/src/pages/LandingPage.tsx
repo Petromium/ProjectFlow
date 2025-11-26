@@ -93,7 +93,7 @@ export default function LandingPage() {
   const { theme, toggleTheme } = useTheme();
 
   const handleLogin = () => {
-    window.location.href = '/api/login';
+    window.location.href = '/login';
   };
 
   return (
@@ -137,7 +137,7 @@ export default function LandingPage() {
             <span className="text-primary">From Concept to Completion</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
-            A comprehensive Project Management Information System designed for Engineering, Procurement, 
+            A comprehensive Project Management Information System designed for Engineering, Procurement,
             and Construction projects. Track WBS, manage costs, assess risks, and collaborate in real-time.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
@@ -160,7 +160,7 @@ export default function LandingPage() {
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold mb-4">Everything You Need for EPC Success</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              From work breakdown structures to earned value analysis, we provide the tools 
+              From work breakdown structures to earned value analysis, we provide the tools
               engineering firms need to deliver projects on time and within budget.
             </p>
           </div>
@@ -293,8 +293,8 @@ export default function LandingPage() {
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-6">Built for Engineering Excellence</h2>
             <p className="text-muted-foreground mb-8">
-              ProjectFlow was designed from the ground up for EPC (Engineering, Procurement, and Construction) 
-              projects. We understand the unique challenges of managing complex engineering projects with 
+              ProjectFlow was designed from the ground up for EPC (Engineering, Procurement, and Construction)
+              projects. We understand the unique challenges of managing complex engineering projects with
               multiple stakeholders, strict deadlines, and significant budgets.
             </p>
             <div className="grid gap-6 md:grid-cols-3 text-center">
@@ -319,7 +319,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Transform Your Project Management?</h2>
           <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join hundreds of engineering teams already using ProjectFlow to deliver projects 
+            Join hundreds of engineering teams already using ProjectFlow to deliver projects
             on time and within budget.
           </p>
           <Button size="lg" onClick={handleLogin} data-testid="button-cta-final">

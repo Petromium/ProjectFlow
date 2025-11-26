@@ -16,7 +16,7 @@ export const stakeholderRoleEnum = pgEnum("stakeholder_role", ["sponsor", "clien
 
 // EPC-Specific Enums
 export const disciplineEnum = pgEnum("discipline", [
-  "civil", "structural", "mechanical", "electrical", "piping", 
+  "civil", "structural", "mechanical", "electrical", "piping",
   "instrumentation", "process", "hvac", "architectural", "general"
 ]);
 export const constraintTypeEnum = pgEnum("constraint_type", [
@@ -24,11 +24,11 @@ export const constraintTypeEnum = pgEnum("constraint_type", [
 ]); // As Soon/Late As Possible, Start/Finish No Earlier/Later Than, Must Start/Finish On
 export const riskResponseEnum = pgEnum("risk_response", ["avoid", "transfer", "mitigate", "accept", "escalate"]);
 export const riskCategoryEnum = pgEnum("risk_category", [
-  "technical", "external", "organizational", "project-management", 
+  "technical", "external", "organizational", "project-management",
   "commercial", "hse", "quality", "schedule", "resource"
 ]);
 export const issueTypeEnum = pgEnum("issue_type", [
-  "design", "procurement", "construction", "commissioning", 
+  "design", "procurement", "construction", "commissioning",
   "hse", "quality", "commercial", "interface", "resource"
 ]);
 export const escalationLevelEnum = pgEnum("escalation_level", ["project", "program", "executive", "client"]);
@@ -91,7 +91,7 @@ export const availabilityStatusEnum = pgEnum("availability_status", ["available"
 
 // Project Events Enums
 export const eventTypeEnum = pgEnum("event_type", [
-  "meeting", "audit", "inspection", "milestone", "deadline", 
+  "meeting", "audit", "inspection", "milestone", "deadline",
   "training", "workshop", "review", "handover", "other"
 ]);
 
@@ -117,13 +117,27 @@ export const sessions = pgTable(
   })
 );
 
-// Users (Replit Auth compatible)
+// Users (Local Auth + Google OAuth)
 export const users = pgTable("users", {
-  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`), // Replit Auth user ID
-  email: varchar("email", { length: 255 }).unique(),
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email", { length: 255 }).unique().notNull(),
   firstName: varchar("first_name", { length: 255 }),
   lastName: varchar("last_name", { length: 255 }),
   profileImageUrl: varchar("profile_image_url", { length: 512 }),
+  // Auth fields
+  passwordHash: varchar("password_hash", { length: 255 }), // null if Google-only user
+  googleId: varchar("google_id", { length: 255 }).unique(), // Google OAuth ID
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  emailVerificationToken: varchar("email_verification_token", { length: 255 }),
+  emailVerificationExpires: timestamp("email_verification_expires"),
+  passwordResetToken: varchar("password_reset_token", { length: 255 }),
+  passwordResetExpires: timestamp("password_reset_expires"),
+  // 2FA fields
+  totpSecret: varchar("totp_secret", { length: 255 }), // encrypted TOTP secret
+  totpEnabled: boolean("totp_enabled").default(false).notNull(),
+  backupCodes: text("backup_codes"), // JSON array of hashed backup codes
+  // Timestamps
+  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -374,7 +388,7 @@ export const resources = pgTable("resources", {
   discipline: disciplineEnum("discipline").default("general"), // EPC discipline
   availability: integer("availability").notNull().default(100), // percentage
   availabilityStatus: availabilityStatusEnum("availability_status").default("available"),
-  
+
   // Legacy field - keep for backward compat
   costPerHour: decimal("cost_per_hour", { precision: 10, scale: 2 }),
   // Primary pricing model
@@ -382,7 +396,7 @@ export const resources = pgTable("resources", {
   rate: decimal("rate", { precision: 15, scale: 2 }).default("0"), // The rate amount
   unitType: unitTypeEnum("unit_type").default("hr"), // Unit type for per-unit pricing
   currency: varchar("currency", { length: 3 }).notNull().default("USD"),
-  
+
   // Multiple pricing models (JSONB array for flexibility)
   // Format: [{ name: string, rateType: string, rate: number, unitType: string, currency: string, effectiveFrom?: date, effectiveTo?: date }]
   pricingModels: jsonb("pricing_models").$type<Array<{
@@ -395,12 +409,12 @@ export const resources = pgTable("resources", {
     effectiveTo?: string;
     isDefault?: boolean;
   }>>(),
-  
+
   // Skills and certifications (array, max 10)
   skillsArray: text("skills_array").array(),
   skills: text("skills"), // Legacy comma-separated skills (backward compat)
   certifications: text("certifications").array(),
-  
+
   // Contract and vendor information
   contractType: contractTypeEnum("contract_type"),
   vendorName: varchar("vendor_name", { length: 255 }),
@@ -409,7 +423,7 @@ export const resources = pgTable("resources", {
   contractStartDate: timestamp("contract_start_date"),
   contractEndDate: timestamp("contract_end_date"),
   contractReference: varchar("contract_reference", { length: 100 }),
-  
+
   // Capacity and working hours
   maxHoursPerDay: integer("max_hours_per_day").default(8),
   maxHoursPerWeek: integer("max_hours_per_week").default(40),
@@ -421,18 +435,18 @@ export const resources = pgTable("resources", {
     type: string;
     note?: string;
   }>>(),
-  
+
   // Efficiency and productivity metrics
   efficiencyRating: decimal("efficiency_rating", { precision: 5, scale: 2 }).default("1.0"), // 0.5 to 2.0
   productivityFactor: decimal("productivity_factor", { precision: 5, scale: 2 }).default("1.0"),
   qualityScore: integer("quality_score"), // 1-100
-  
+
   // Additional metadata
   description: text("description"),
   notes: text("notes"),
   tags: text("tags").array(),
   profileImageUrl: varchar("profile_image_url", { length: 512 }),
-  
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1090,8 +1104,8 @@ export const cloudSyncedFiles = pgTable("cloud_synced_files", {
 }));
 
 // Zod Schemas for Cloud Storage Connections
-export const insertCloudStorageConnectionSchema = createInsertSchema(cloudStorageConnections).omit({ 
-  id: true, createdAt: true, updatedAt: true, connectedBy: true, lastSyncAt: true, syncStatus: true, syncError: true 
+export const insertCloudStorageConnectionSchema = createInsertSchema(cloudStorageConnections).omit({
+  id: true, createdAt: true, updatedAt: true, connectedBy: true, lastSyncAt: true, syncStatus: true, syncError: true
 });
 export const updateCloudStorageConnectionSchema = insertCloudStorageConnectionSchema.partial();
 export const selectCloudStorageConnectionSchema = createSelectSchema(cloudStorageConnections);

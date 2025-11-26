@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server, IncomingMessage } from "http";
 import { parse as parseCookie } from "cookie";
 import { createHmac, timingSafeEqual } from "crypto";
-import { sessionStore } from "./replitAuth";
+import { sessionStore } from "./auth";
 import { storage } from "./storage";
 import { log } from "./app";
 
@@ -58,32 +58,32 @@ function unsign(signedVal: string, secret: string): string | false {
   const expectedInput = tentativeValue + "." + sign(tentativeValue, secret);
   const expectedBuffer = Buffer.from(expectedInput);
   const inputBuffer = Buffer.from(signedVal);
-  
+
   if (expectedBuffer.length !== inputBuffer.length) {
     return false;
   }
-  
+
   return timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
 }
 
 function parseSessionId(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) return null;
-  
+
   const secret = process.env.SESSION_SECRET;
   if (!secret) return null;
-  
+
   const cookies = parseCookie(cookieHeader);
   const sessionCookie = cookies["connect.sid"];
-  
+
   if (!sessionCookie) return null;
-  
+
   const decoded = decodeURIComponent(sessionCookie);
-  
+
   if (decoded.startsWith("s:")) {
     const unsigned = unsign(decoded.slice(2), secret);
     return unsigned || null;
   }
-  
+
   return sessionCookie;
 }
 
@@ -94,7 +94,7 @@ async function getSessionUser(sessionId: string): Promise<{ id: string; claims: 
         resolve(null);
         return;
       }
-      
+
       const passport = (session as any).passport;
       if (passport?.user?.claims?.sub) {
         resolve({
@@ -128,15 +128,15 @@ class WebSocketManager {
       socket.isAlive = true;
       socket.isAuthenticated = false;
 
-      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || 
-                       req.socket.remoteAddress || 
-                       "unknown";
+      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+        req.socket.remoteAddress ||
+        "unknown";
 
       const attempts = this.failedAttempts.get(clientIp);
       if (attempts) {
         const now = Date.now();
-        if (now - attempts.lastAttempt < this.RATE_LIMIT_WINDOW && 
-            attempts.count >= this.MAX_FAILED_ATTEMPTS) {
+        if (now - attempts.lastAttempt < this.RATE_LIMIT_WINDOW &&
+          attempts.count >= this.MAX_FAILED_ATTEMPTS) {
           log(`WebSocket rate limited: ${clientIp}`, "ws");
           socket.close(4029, "Too many requests");
           return;
@@ -147,7 +147,7 @@ class WebSocketManager {
       }
 
       const sessionId = parseSessionId(req.headers.cookie);
-      
+
       if (!sessionId) {
         this.recordFailedAttempt(clientIp);
         log("WebSocket connection rejected: no session cookie", "ws");
@@ -156,7 +156,7 @@ class WebSocketManager {
       }
 
       const user = await getSessionUser(sessionId);
-      
+
       if (!user) {
         this.recordFailedAttempt(clientIp);
         log("WebSocket connection rejected: invalid session", "ws");
@@ -166,7 +166,7 @@ class WebSocketManager {
 
       socket.userId = user.id;
       socket.isAuthenticated = true;
-      
+
       log(`WebSocket client connected: ${user.id}`, "ws");
 
       socket.send(

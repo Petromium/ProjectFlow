@@ -37,12 +37,15 @@ import DocumentsPage from "@/pages/DocumentsPage";
 import PMODashboardPage from "@/pages/PMODashboardPage";
 import PMOCalendarPage from "@/pages/PMOCalendarPage";
 import PMOInventoryPage from "@/pages/PMOInventoryPage";
+import LoginPage from "@/pages/LoginPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   // Track page views when routes change
   useAnalytics();
-  
+
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -121,7 +124,18 @@ function AppContent() {
     );
   }
 
-  return isAuthenticated ? <AuthenticatedApp /> : <LandingPage />;
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/login" component={LoginPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route component={LandingPage} />
+      </Switch>
+    );
+  }
+
+  return <AuthenticatedApp />;
 }
 
 export default function App() {

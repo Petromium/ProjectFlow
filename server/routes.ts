@@ -23,7 +23,8 @@ import {
   insertAiConversationSchema,
   insertEmailTemplateSchema,
   updateEmailTemplateSchema,
-  insertResourceSchema
+  insertResourceSchema,
+  insertResourceAssignmentSchema
 } from "@shared/schema";
 import { chatWithAssistant, type ChatMessage } from "./aiAssistant";
 import { z } from "zod";
@@ -1930,21 +1931,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/tasks/:taskId/assignments', isAuthenticated, async (req: any, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
+      if (isNaN(taskId)) {
+        return res.status(400).json({ message: "Invalid task ID" });
+      }
       const assignments = await storage.getResourceAssignmentsByTask(taskId);
       res.json(assignments);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching assignments:", error);
-      res.status(500).json({ message: "Failed to fetch assignments" });
+      res.status(500).json({ message: error?.message || "Failed to fetch assignments" });
     }
   });
 
   app.post('/api/assignments', isAuthenticated, async (req: any, res) => {
     try {
-      const assignment = await storage.createResourceAssignment(req.body);
+      // Validate incoming data with Zod schema
+      const data = insertResourceAssignmentSchema.parse(req.body);
+      const assignment = await storage.createResourceAssignment(data);
       res.json(assignment);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating assignment:", error);
-      res.status(400).json({ message: "Failed to create assignment" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation failed", errors: error.errors });
+      }
+      res.status(400).json({ message: error?.message || "Failed to create assignment" });
     }
   });
 
@@ -2292,11 +2301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/tasks/:taskId/inherited/resources', isAuthenticated, async (req: any, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
+      if (isNaN(taskId)) {
+        return res.status(400).json({ message: "Invalid task ID" });
+      }
       const inherited = await storage.getInheritedResources(taskId);
       res.json(inherited);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching inherited resources:", error);
-      res.status(500).json({ message: "Failed to fetch inherited resources" });
+      res.status(500).json({ message: error?.message || "Failed to fetch inherited resources" });
     }
   });
 

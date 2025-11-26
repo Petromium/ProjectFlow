@@ -91,16 +91,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertOrganizationSchema.parse(req.body);
-      
+
       const organization = await storage.createOrganization(data);
-      
+
       // Add user as owner of the organization
       await storage.createUserOrganization({
         userId,
         organizationId: organization.id,
         role: 'owner',
       });
-      
+
       res.json(organization);
     } catch (error) {
       console.error("Error creating organization:", error);
@@ -113,20 +113,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const projects = await storage.getProjectsByOrganization(orgId);
       const tasks = await storage.getTasksByOrganization(orgId);
       const risks = await storage.getRisksByOrganization(orgId);
       const issues = await storage.getIssuesByOrganization(orgId);
       const costs = await storage.getCostItemsByOrganization(orgId);
-      
+
       const totalBudget = projects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
       const actualCost = costs.reduce((sum, c) => sum + (Number(c.actualCost) || 0), 0);
-      
+
       res.json({
         projectCount: projects.length,
         projects: projects.map(p => ({ id: p.id, name: p.name, status: p.status })),
@@ -168,11 +168,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const tasks = await storage.getTasksByOrganization(orgId);
       res.json(tasks);
     } catch (error) {
@@ -185,11 +185,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const resources = await storage.getResourcesByOrganization(orgId);
       res.json(resources);
     } catch (error) {
@@ -203,12 +203,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       // Check access
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const projects = await storage.getProjectsByOrganization(orgId);
       res.json(projects);
     } catch (error) {
@@ -221,12 +221,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, id)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const project = await storage.getProject(id);
       res.json(project);
     } catch (error) {
@@ -239,12 +239,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertProjectSchema.parse(req.body);
-      
+
       // Check access to organization
       if (!await checkOrganizationAccess(userId, data.organizationId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.createProject(data);
       res.json(project);
     } catch (error) {
@@ -257,12 +257,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, id)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const data = updateProjectSchema.parse(req.body);
       const project = await storage.updateProject(id, data);
       res.json(project);
@@ -276,12 +276,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, id)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       await storage.deleteProject(id);
       res.json({ success: true });
     } catch (error) {
@@ -295,12 +295,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const tasks = await storage.getTasksByProject(projectId);
       res.json(tasks);
     } catch (error) {
@@ -313,17 +313,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const task = await storage.getTask(id);
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       // Check access through project
       if (!await checkProjectAccess(userId, task.projectId)) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       res.json(task);
     } catch (error) {
       console.error("Error fetching task:", error);
@@ -335,20 +335,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertTaskSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const task = await storage.createTask({
         ...data,
         createdBy: userId,
       });
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(task.projectId, "task-created", task, userId);
-      
+
       res.json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -360,17 +360,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const task = await storage.getTask(id);
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, task.projectId)) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       // Convert date strings to Date objects (JSON serializes dates as strings)
       // Empty strings are treated as null to allow clearing date fields
       const body = { ...req.body };
@@ -382,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return value;
       };
-      
+
       if ('startDate' in body) body.startDate = normalizeDateField(body.startDate);
       if ('endDate' in body) body.endDate = normalizeDateField(body.endDate);
       if ('constraintDate' in body) body.constraintDate = normalizeDateField(body.constraintDate);
@@ -390,13 +390,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if ('earlyFinish' in body) body.earlyFinish = normalizeDateField(body.earlyFinish);
       if ('lateStart' in body) body.lateStart = normalizeDateField(body.lateStart);
       if ('lateFinish' in body) body.lateFinish = normalizeDateField(body.lateFinish);
-      
+
       const data = updateTaskSchema.parse(body);
       const updated = await storage.updateTask(id, data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(task.projectId, "task-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -408,22 +408,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const task = await storage.getTask(id);
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, task.projectId)) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       await storage.deleteTask(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(task.projectId, "task-deleted", { id, projectId: task.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -436,12 +436,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const dependencies = await storage.getDependenciesByProject(projectId);
       res.json(dependencies);
     } catch (error) {
@@ -454,17 +454,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertTaskDependencySchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const dependency = await storage.createTaskDependency(data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(dependency.projectId, "dependency-created", dependency, userId);
-      
+
       res.json(dependency);
     } catch (error) {
       console.error("Error creating dependency:", error);
@@ -476,23 +476,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const dependency = await storage.getTaskDependency(id);
       if (!dependency) {
         return res.status(404).json({ message: "Dependency not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, dependency.projectId)) {
         return res.status(404).json({ message: "Dependency not found" });
       }
-      
+
       const { type, lagDays } = req.body;
       const updated = await storage.updateTaskDependency(id, { type, lagDays });
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(dependency.projectId, "dependency-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating dependency:", error);
@@ -504,22 +504,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const dependency = await storage.getTaskDependency(id);
       if (!dependency) {
         return res.status(404).json({ message: "Dependency not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, dependency.projectId)) {
         return res.status(404).json({ message: "Dependency not found" });
       }
-      
+
       await storage.deleteTaskDependency(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(dependency.projectId, "dependency-deleted", { id, projectId: dependency.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting dependency:", error);
@@ -528,55 +528,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Bulk Operations Routes =====
-  
+
   // Chain tasks with Finish-to-Start dependencies (waterfall)
   app.post('/api/bulk/dependencies/chain', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const { taskIds, type = "FS" } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length < 2) {
         return res.status(400).json({ message: "At least 2 tasks required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length < 2) {
         return res.status(404).json({ message: "At least 2 valid tasks required" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Sort tasks by WBS code to chain in correct order
-      const sortedTasks = validTasks.sort((a, b) => 
+      const sortedTasks = validTasks.sort((a, b) =>
         (a!.wbsCode || "").localeCompare(b!.wbsCode || "")
       );
-      
+
       // Create chain of dependencies
       const createdDeps = [];
       for (let i = 0; i < sortedTasks.length - 1; i++) {
         const predecessor = sortedTasks[i]!;
         const successor = sortedTasks[i + 1]!;
-        
+
         // Skip self-dependencies
         if (predecessor.id === successor.id) continue;
-        
+
         // Check if dependency already exists
         const existingDeps = await storage.getTaskDependencies(successor.id);
         const exists = existingDeps.some(d => d.predecessorId === predecessor.id);
-        
+
         if (!exists) {
           const dep = await storage.createTaskDependency({
             projectId: projectId,
@@ -588,10 +588,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdDeps.push(dep);
         }
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "dependency-created", { count: createdDeps.length }, userId);
-      
+
       res.json({ success: true, created: createdDeps.length });
     } catch (error) {
       console.error("Error chaining dependencies:", error);
@@ -604,54 +604,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds, type } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length < 2) {
         return res.status(400).json({ message: "At least 2 tasks required" });
       }
-      
+
       if (!["SS", "FF"].includes(type)) {
         return res.status(400).json({ message: "Type must be SS or FF" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length < 2) {
         return res.status(404).json({ message: "At least 2 valid tasks required" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Sort tasks by WBS code - first task becomes the anchor
-      const sortedTasks = validTasks.sort((a, b) => 
+      const sortedTasks = validTasks.sort((a, b) =>
         (a!.wbsCode || "").localeCompare(b!.wbsCode || "")
       );
-      
+
       const anchorTask = sortedTasks[0]!;
-      
+
       // Create dependencies from anchor to all other tasks
       const createdDeps = [];
       for (let i = 1; i < sortedTasks.length; i++) {
         const successor = sortedTasks[i]!;
-        
+
         // Skip self-dependencies
         if (anchorTask.id === successor.id) continue;
-        
+
         // Check if dependency already exists
         const existingDeps = await storage.getTaskDependencies(successor.id);
         const exists = existingDeps.some(d => d.predecessorId === anchorTask.id && d.type === type);
-        
+
         if (!exists) {
           const dep = await storage.createTaskDependency({
             projectId: projectId,
@@ -663,10 +663,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdDeps.push(dep);
         }
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "dependency-created", { count: createdDeps.length }, userId);
-      
+
       res.json({ success: true, created: createdDeps.length });
     } catch (error) {
       console.error("Error setting parallel dependencies:", error);
@@ -679,31 +679,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Delete all dependencies where any of these validated tasks is successor
       let deletedCount = 0;
       for (const task of validTasks) {
@@ -713,10 +713,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deletedCount++;
         }
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "dependency-deleted", { count: deletedCount }, userId);
-      
+
       res.json({ success: true, deleted: deletedCount });
     } catch (error) {
       console.error("Error clearing dependencies:", error);
@@ -729,43 +729,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds, resourceIds } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       if (!Array.isArray(resourceIds) || resourceIds.length === 0) {
         return res.status(400).json({ message: "At least 1 resource required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Fetch and validate all resources belong to the same project
       const resources = await Promise.all(resourceIds.map((id: number) => storage.getResource(id)));
       const validResources = resources.filter(r => r !== null && r.projectId === projectId);
-      
+
       if (validResources.length === 0) {
         return res.status(400).json({ message: "No valid resources found for this project" });
       }
-      
+
       // Create resource assignments for each validated task-resource combination
       let createdCount = 0;
       for (const task of validTasks) {
@@ -774,7 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Check if assignment already exists
             const existingAssignments = await storage.getResourceAssignmentsByTask(task!.id);
             const exists = existingAssignments.some(a => a.resourceId === resource!.id);
-            
+
             if (!exists) {
               await storage.createResourceAssignment({
                 projectId: projectId,
@@ -790,10 +790,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "resource-assignment-created", { count: createdCount }, userId);
-      
+
       res.json({ success: true, created: createdCount });
     } catch (error) {
       console.error("Error bulk assigning resources:", error);
@@ -806,43 +806,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds, riskIds } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       if (!Array.isArray(riskIds) || riskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 risk required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Fetch and validate all risks belong to the same project
       const risks = await Promise.all(riskIds.map((id: number) => storage.getRisk(id)));
       const validRisks = risks.filter(r => r !== null && r.projectId === projectId);
-      
+
       if (validRisks.length === 0) {
         return res.status(400).json({ message: "No valid risks found for this project" });
       }
-      
+
       // Create task-risk links for validated tasks and risks
       let createdCount = 0;
       for (const task of validTasks) {
@@ -855,7 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       res.json({ success: true, created: createdCount });
     } catch (error) {
       console.error("Error bulk linking risks:", error);
@@ -868,43 +868,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds, issueIds } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       if (!Array.isArray(issueIds) || issueIds.length === 0) {
         return res.status(400).json({ message: "At least 1 issue required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Fetch and validate all issues belong to the same project
       const issues = await Promise.all(issueIds.map((id: number) => storage.getIssue(id)));
       const validIssues = issues.filter(i => i !== null && i.projectId === projectId);
-      
+
       if (validIssues.length === 0) {
         return res.status(400).json({ message: "No valid issues found for this project" });
       }
-      
+
       // Create task-issue links for validated tasks and issues
       let createdCount = 0;
       for (const task of validTasks) {
@@ -917,7 +917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       res.json({ success: true, created: createdCount });
     } catch (error) {
       console.error("Error bulk linking issues:", error);
@@ -930,45 +930,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds, updates } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       if (!updates || (updates.status === undefined && updates.progress === undefined)) {
         return res.status(400).json({ message: "At least one update field required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Update all validated tasks
       let updatedCount = 0;
       for (const task of validTasks) {
         await storage.updateTask(task!.id, updates);
         updatedCount++;
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "task-updated", { count: updatedCount }, userId);
-      
+
       res.json({ success: true, updated: updatedCount });
     } catch (error) {
       console.error("Error bulk updating tasks:", error);
@@ -981,41 +981,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskIds } = req.body;
-      
+
       if (!Array.isArray(taskIds) || taskIds.length === 0) {
         return res.status(400).json({ message: "At least 1 task required" });
       }
-      
+
       // Fetch all tasks and verify they exist and belong to the same project
       const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
       const validTasks = tasks.filter(t => t !== null);
-      
+
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
       }
-      
+
       // Verify all tasks belong to the same project
       const projectId = validTasks[0]!.projectId;
       const allSameProject = validTasks.every(t => t!.projectId === projectId);
       if (!allSameProject) {
         return res.status(400).json({ message: "All tasks must belong to the same project" });
       }
-      
+
       // Check user has access to this project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Delete all validated tasks
       let deletedCount = 0;
       for (const task of validTasks) {
         await storage.deleteTask(task!.id);
         deletedCount++;
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "task-deleted", { count: deletedCount }, userId);
-      
+
       res.json({ success: true, deleted: deletedCount });
     } catch (error) {
       console.error("Error bulk deleting tasks:", error);
@@ -1028,12 +1028,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const stakeholders = await storage.getStakeholdersByProject(projectId);
       res.json(stakeholders);
     } catch (error) {
@@ -1046,17 +1046,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertStakeholderSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const stakeholder = await storage.createStakeholder(data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-created", stakeholder, userId);
-      
+
       res.json(stakeholder);
     } catch (error) {
       console.error("Error creating stakeholder:", error);
@@ -1068,23 +1068,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const stakeholder = await storage.getStakeholder(id);
       if (!stakeholder) {
         return res.status(404).json({ message: "Stakeholder not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, stakeholder.projectId)) {
         return res.status(404).json({ message: "Stakeholder not found" });
       }
-      
+
       const data = updateStakeholderSchema.parse(req.body);
       const updated = await storage.updateStakeholder(id, data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating stakeholder:", error);
@@ -1096,22 +1096,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const stakeholder = await storage.getStakeholder(id);
       if (!stakeholder) {
         return res.status(404).json({ message: "Stakeholder not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, stakeholder.projectId)) {
         return res.status(404).json({ message: "Stakeholder not found" });
       }
-      
+
       await storage.deleteStakeholder(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(stakeholder.projectId, "stakeholder-deleted", { id, projectId: stakeholder.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting stakeholder:", error);
@@ -1124,12 +1124,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const raciAssignments = await storage.getStakeholderRaciByProject(projectId);
       res.json(raciAssignments);
     } catch (error) {
@@ -1142,17 +1142,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const taskId = parseInt(req.params.taskId);
-      
+
       const task = await storage.getTask(taskId);
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, task.projectId)) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
+
       const raciAssignments = await storage.getStakeholderRaciByTask(taskId);
       res.json(raciAssignments);
     } catch (error) {
@@ -1165,14 +1165,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertStakeholderRaciSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const raci = await storage.createStakeholderRaci(data);
-      
+
       // Propagate to descendants if this is an explicit (not inherited) assignment
       if (!data.isInherited) {
         await storage.propagateRaciToDescendants(
@@ -1183,10 +1183,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           raci.projectId
         );
       }
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(raci.projectId, "raci-created", raci, userId);
-      
+
       res.json(raci);
     } catch (error) {
       console.error("Error creating RACI assignment:", error);
@@ -1198,17 +1198,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertStakeholderRaciSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const raci = await storage.upsertStakeholderRaci(data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(raci.projectId, "raci-upserted", raci, userId);
-      
+
       res.json(raci);
     } catch (error) {
       console.error("Error upserting RACI assignment:", error);
@@ -1220,23 +1220,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const raci = await storage.getStakeholderRaci(id);
       if (!raci) {
         return res.status(404).json({ message: "RACI assignment not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, raci.projectId)) {
         return res.status(404).json({ message: "RACI assignment not found" });
       }
-      
+
       const data = updateStakeholderRaciSchema.parse(req.body);
       const updated = await storage.updateStakeholderRaci(id, data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(raci.projectId, "raci-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating RACI assignment:", error);
@@ -1248,17 +1248,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const raci = await storage.getStakeholderRaci(id);
       if (!raci) {
         return res.status(404).json({ message: "RACI assignment not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, raci.projectId)) {
         return res.status(404).json({ message: "RACI assignment not found" });
       }
-      
+
       // Remove inherited values from descendants if this is an explicit assignment
       if (!raci.isInherited) {
         await storage.removeInheritedRaciFromDescendants(
@@ -1268,12 +1268,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           raci.resourceId
         );
       }
-      
+
       await storage.deleteStakeholderRaci(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(raci.projectId, "raci-deleted", { id, projectId: raci.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting RACI assignment:", error);
@@ -1285,21 +1285,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { taskId, raciType, projectId } = req.body;
-      
+
       if (!taskId || !raciType || !projectId) {
         return res.status(400).json({ message: "taskId, raciType, and projectId are required" });
       }
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       await storage.resetRaciToInherited(taskId, raciType);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(projectId, "raci-reset", { taskId, raciType }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error resetting RACI to inherited:", error);
@@ -1312,12 +1312,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const risks = await storage.getRisksByProject(projectId);
       res.json(risks);
     } catch (error) {
@@ -1330,24 +1330,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertRiskSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Auto-generate code if not provided
       if (!data.code) {
         const existingRisks = await storage.getRisksByProject(data.projectId);
         const nextNumber = existingRisks.length + 1;
         data.code = `RISK-${String(nextNumber).padStart(3, '0')}`;
       }
-      
+
       const risk = await storage.createRisk(data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(risk.projectId, "risk-created", risk, userId);
-      
+
       res.json(risk);
     } catch (error) {
       console.error("Error creating risk:", error);
@@ -1359,23 +1359,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const existing = await storage.getRisk(id);
       if (!existing) {
         return res.status(404).json({ message: "Risk not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, existing.projectId)) {
         return res.status(404).json({ message: "Risk not found" });
       }
-      
+
       const data = updateRiskSchema.parse(req.body);
       // Filter out undefined values
       const updateFields = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
-      
+
       // Merge with existing to preserve required fields
       const mergedData = {
         code: existing.code,
@@ -1383,12 +1383,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         identifiedDate: existing.identifiedDate,
         ...updateFields,
       };
-      
+
       const updated = await storage.updateRisk(id, mergedData);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(existing.projectId, "risk-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating risk:", error);
@@ -1400,22 +1400,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const risk = await storage.getRisk(id);
       if (!risk) {
         return res.status(404).json({ message: "Risk not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, risk.projectId)) {
         return res.status(404).json({ message: "Risk not found" });
       }
-      
+
       await storage.deleteRisk(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(risk.projectId, "risk-deleted", { id, projectId: risk.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting risk:", error);
@@ -1428,12 +1428,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const issues = await storage.getIssuesByProject(projectId);
       res.json(issues);
     } catch (error) {
@@ -1446,28 +1446,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertIssueSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Auto-generate code if not provided
       if (!data.code) {
         const existingIssues = await storage.getIssuesByProject(data.projectId);
         const nextNumber = existingIssues.length + 1;
         data.code = `ISS-${String(nextNumber).padStart(3, '0')}`;
       }
-      
+
       const issue = await storage.createIssue({
         ...data,
         code: data.code,
         reportedBy: userId,
       });
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(issue.projectId, "issue-created", issue, userId);
-      
+
       res.json(issue);
     } catch (error) {
       console.error("Error creating issue:", error);
@@ -1479,23 +1479,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const existing = await storage.getIssue(id);
       if (!existing) {
         return res.status(404).json({ message: "Issue not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, existing.projectId)) {
         return res.status(404).json({ message: "Issue not found" });
       }
-      
+
       const data = updateIssueSchema.parse(req.body);
       // Filter out undefined values
       const updateFields = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
-      
+
       // Merge with existing to preserve required fields
       const mergedData = {
         code: existing.code,
@@ -1504,12 +1504,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reportedDate: existing.reportedDate,
         ...updateFields,
       };
-      
+
       const updated = await storage.updateIssue(id, mergedData);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(existing.projectId, "issue-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating issue:", error);
@@ -1521,22 +1521,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const issue = await storage.getIssue(id);
       if (!issue) {
         return res.status(404).json({ message: "Issue not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, issue.projectId)) {
         return res.status(404).json({ message: "Issue not found" });
       }
-      
+
       await storage.deleteIssue(id);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(issue.projectId, "issue-deleted", { id, projectId: issue.projectId }, userId);
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting issue:", error);
@@ -1549,12 +1549,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const costs = await storage.getCostItemsByProject(projectId);
       res.json(costs);
     } catch (error) {
@@ -1567,17 +1567,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = insertCostItemSchema.parse(req.body);
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const cost = await storage.createCostItem(data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(cost.projectId, "cost-item-created", cost, userId);
-      
+
       res.json(cost);
     } catch (error) {
       console.error("Error creating cost item:", error);
@@ -1589,23 +1589,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const cost = await storage.getCostItem(id);
       if (!cost) {
         return res.status(404).json({ message: "Cost item not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, cost.projectId)) {
         return res.status(404).json({ message: "Cost item not found" });
       }
-      
+
       const data = updateCostItemSchema.parse(req.body);
       const updated = await storage.updateCostItem(id, data);
-      
+
       // Notify connected clients
       wsManager.notifyProjectUpdate(cost.projectId, "cost-item-updated", updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating cost item:", error);
@@ -1618,12 +1618,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       // Check access
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const resources = await storage.getResourcesByProject(projectId);
       res.json(resources);
     } catch (error) {
@@ -1636,12 +1636,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const data = req.body;
-      
+
       // Check access to project
       if (!await checkProjectAccess(userId, data.projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const resource = await storage.createResource(data);
       res.json(resource);
     } catch (error) {
@@ -1654,17 +1654,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const resource = await storage.getResource(id);
       if (!resource) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, resource.projectId)) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       const updated = await storage.updateResource(id, req.body);
       res.json(updated);
     } catch (error) {
@@ -1677,17 +1677,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const resource = await storage.getResource(id);
       if (!resource) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       // Check access
       if (!await checkProjectAccess(userId, resource.projectId)) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       await storage.deleteResource(id);
       res.json({ success: true });
     } catch (error) {
@@ -1701,23 +1701,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
-      const startDate = req.query.startDate 
-        ? new Date(req.query.startDate as string) 
+
+      const startDate = req.query.startDate
+        ? new Date(req.query.startDate as string)
         : project.startDate || new Date();
-      const endDate = req.query.endDate 
-        ? new Date(req.query.endDate as string) 
+      const endDate = req.query.endDate
+        ? new Date(req.query.endDate as string)
         : project.endDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-      
+
       const utilization = await storage.getProjectResourceUtilization(projectId, startDate, endDate);
       res.json(utilization);
     } catch (error) {
@@ -1731,16 +1731,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const resourceId = parseInt(req.params.resourceId);
-      
+
       const resource = await storage.getResource(resourceId);
       if (!resource) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, resource.projectId)) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      
+
       const assignments = await storage.getResourceAssignmentsByResource(resourceId);
       res.json(assignments);
     } catch (error) {
@@ -1782,17 +1782,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Documents Routes =====
-  
+
   // Get documents by project
   app.get('/api/projects/:projectId/documents', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const documents = await storage.getDocumentsByProject(projectId);
       res.json(documents);
     } catch (error) {
@@ -1806,16 +1806,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const document = await storage.getDocument(id);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, document.projectId)) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       res.json(document);
     } catch (error) {
       console.error("Error fetching document:", error);
@@ -1828,11 +1828,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { projectId } = req.body;
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const document = await storage.createDocument({
         ...req.body,
         createdBy: userId,
@@ -1849,16 +1849,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const document = await storage.getDocument(id);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, document.projectId)) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       const updated = await storage.updateDocument(id, req.body);
       res.json(updated);
     } catch (error) {
@@ -1872,16 +1872,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const document = await storage.getDocument(id);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, document.projectId)) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       await storage.deleteDocument(id);
       res.json({ success: true });
     } catch (error) {
@@ -1891,17 +1891,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Project Events Routes (Calendar) =====
-  
+
   // Get project events
   app.get('/api/projects/:projectId/events', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const events = await storage.getProjectEventsByProject(projectId);
       res.json(events);
     } catch (error) {
@@ -1915,16 +1915,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const event = await storage.getProjectEvent(id);
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, event.projectId)) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       res.json(event);
     } catch (error) {
       console.error("Error fetching event:", error);
@@ -1937,11 +1937,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { projectId } = req.body;
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const event = await storage.createProjectEvent({
         ...req.body,
         createdBy: userId,
@@ -1958,16 +1958,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const event = await storage.getProjectEvent(id);
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, event.projectId)) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       const updated = await storage.updateProjectEvent(id, req.body);
       res.json(updated);
     } catch (error) {
@@ -1981,16 +1981,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const event = await storage.getProjectEvent(id);
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       if (!await checkProjectAccess(userId, event.projectId)) {
         return res.status(404).json({ message: "Event not found" });
       }
-      
+
       await storage.deleteProjectEvent(id);
       res.json({ success: true });
     } catch (error) {
@@ -2000,7 +2000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Task Junction Tables Routes =====
-  
+
   // Task Documents
   app.get('/api/tasks/:taskId/documents', isAuthenticated, async (req: any, res) => {
     try {
@@ -2110,7 +2110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Inheritance Routes =====
-  
+
   app.get('/api/tasks/:taskId/inherited/resources', isAuthenticated, async (req: any, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
@@ -2156,7 +2156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== AI Assistant Routes =====
-  
+
   // Get user's conversations
   app.get('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
     try {
@@ -2174,11 +2174,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const conversations = await storage.getAiConversationsByProject(projectId, userId);
       res.json(conversations);
     } catch (error) {
@@ -2192,25 +2192,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     title: z.string().optional(),
     projectId: z.number().optional(),
   });
-  
+
   app.post('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const data = createConversationSchema.parse(req.body);
-      
+
       // Verify project access if projectId is provided
       if (data.projectId) {
         if (!await checkProjectAccess(userId, data.projectId)) {
           return res.status(403).json({ message: "Access denied" });
         }
       }
-      
+
       const conversation = await storage.createAiConversation({
         title: data.title || "New Conversation",
         projectId: data.projectId || null,
         userId
       });
-      
+
       res.json(conversation);
     } catch (error) {
       console.error("Error creating conversation:", error);
@@ -2223,13 +2223,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const conversationId = parseInt(req.params.id);
-      
+
       // Check conversation ownership
       const conversation = await storage.getAiConversation(conversationId);
       if (!conversation || conversation.userId !== userId) {
         return res.status(404).json({ message: "Conversation not found" });
       }
-      
+
       const messages = await storage.getAiMessagesByConversation(conversationId);
       res.json(messages);
     } catch (error) {
@@ -2248,23 +2248,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const { conversationId, message } = chatMessageSchema.parse(req.body);
-      
+
       // Check conversation ownership
       const conversation = await storage.getAiConversation(conversationId);
       if (!conversation || conversation.userId !== userId) {
         return res.status(404).json({ message: "Conversation not found" });
       }
-      
+
       // Get conversation history
       const history = await storage.getAiMessagesByConversation(conversationId);
       const messages: ChatMessage[] = history.map(h => ({
         role: h.role as "user" | "assistant" | "system",
         content: h.content
       }));
-      
+
       // Add new user message
       messages.push({ role: "user", content: message });
-      
+
       // Save user message
       await storage.createAiMessage({
         conversationId,
@@ -2272,7 +2272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: message,
         tokensUsed: 0
       });
-      
+
       // Get AI response
       const response = await chatWithAssistant(
         messages,
@@ -2280,21 +2280,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage,
         userId
       );
-      
+
       // Validate response before saving
       // Require either a meaningful message OR function calls were executed
       const hasMessage = response.message && response.message.trim().length > 0 && response.message !== "No response generated";
       const hasFunctionCalls = response.functionCalls && response.functionCalls.length > 0;
-      
+
       if (!hasMessage && !hasFunctionCalls) {
         throw new Error("AI response was empty - no message or function calls");
       }
-      
+
       // Save assistant message only if there's meaningful content
       // If only function calls without message, use a default message
-      const messageContent = hasMessage ? response.message : 
+      const messageContent = hasMessage ? response.message :
         (hasFunctionCalls ? `Executed ${response.functionCalls!.length} function(s)` : response.message);
-      
+
       await storage.createAiMessage({
         conversationId,
         role: "assistant",
@@ -2302,7 +2302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokensUsed: response.tokensUsed,
         functionCall: response.functionCalls ? JSON.stringify(response.functionCalls) : null
       });
-      
+
       // Track usage
       await storage.createAiUsage({
         userId,
@@ -2311,12 +2311,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         model: "gpt-5",
         operation: "chat"
       });
-      
+
       // Update conversation updated time (title if not set)
       await storage.updateAiConversation(conversationId, {
         title: conversation.title || message.substring(0, 50)
       });
-      
+
       res.json({
         message: response.message,
         tokensUsed: response.tokensUsed,
@@ -2332,18 +2332,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const updateConversationSchema = z.object({
     title: z.string().min(1).max(100),
   });
-  
+
   app.patch('/api/ai/conversations/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
       const data = updateConversationSchema.parse(req.body);
-      
+
       const conversation = await storage.getAiConversation(id);
       if (!conversation || conversation.userId !== userId) {
         return res.status(404).json({ message: "Conversation not found" });
       }
-      
+
       const updated = await storage.updateAiConversation(id, { title: data.title });
       res.json(updated);
     } catch (error) {
@@ -2357,12 +2357,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
-      
+
       const conversation = await storage.getAiConversation(id);
       if (!conversation || conversation.userId !== userId) {
         return res.status(404).json({ message: "Conversation not found" });
       }
-      
+
       await storage.deleteAiConversation(id);
       res.json({ success: true });
     } catch (error) {
@@ -2372,23 +2372,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Project Export/Import Routes =====
-  
+
   // Export project data as JSON
   app.get('/api/projects/:projectId/export', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       const format = req.query.format as string;
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const [tasks, risks, issues, stakeholders, costItems, documents, resources, dependencies] = await Promise.all([
         storage.getTasksByProject(projectId),
         storage.getRisksByProject(projectId),
@@ -2399,7 +2399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getResourcesByProject(projectId),
         storage.getDependenciesByProject(projectId)
       ]);
-      
+
       if (format === 'csv') {
         const csvRows = ['ID,WBS Code,Name,Status,Progress,Start Date,End Date,Assigned To,Priority'];
         for (const task of tasks) {
@@ -2492,7 +2492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: d.status
           }))
         };
-        
+
         res.json(exportData);
       }
     } catch (error) {
@@ -2500,9 +2500,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to export project" });
     }
   });
-  
+
   // ===== Import Schema & Template Endpoints =====
-  
+
   // Valid enum values for import validation
   const importEnums = {
     taskStatus: ["not-started", "in-progress", "review", "completed", "on-hold"],
@@ -2516,7 +2516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     discipline: ["general", "civil", "structural", "mechanical", "electrical", "instrumentation", "piping", "process", "hse", "qa-qc", "procurement", "construction", "commissioning", "management", "engineering"],
     currency: ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CNY", "INR", "BRL", "MXN", "SAR", "AED", "SGD", "HKD", "KRW"]
   };
-  
+
   // Value mapping for common alternatives
   const valueMappings: Record<string, Record<string, string>> = {
     taskPriority: { "normal": "medium", "urgent": "critical", "none": "low" },
@@ -2524,7 +2524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     issueStatus: { "pending": "open", "fixed": "resolved", "done": "closed" },
     stakeholderRole: { "owner": "sponsor", "customer": "client", "subcontractor": "contractor", "regulator": "regulatory", "supplier": "vendor" },
     // Discipline mappings for common EPC terms
-    discipline: { 
+    discipline: {
       "management": "general", "project-management": "general", "pm": "general",
       "engineering": "general", "design": "general",
       "procurement": "general", "purchasing": "general", "supply-chain": "general",
@@ -2535,7 +2535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       "pipeline": "piping", "plumbing": "piping"
     }
   };
-  
+
   // Get import schema with all valid enum values (for external AI consumption)
   app.get('/api/import/schema', (req, res) => {
     const schema = {
@@ -2579,8 +2579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               assignedTo: { type: ["string", "null"], description: "Assignee identifier (e.g., 'PM-01', 'ENG-LEAD'). Stored as text - no user account required." },
               estimatedHours: { type: "string", description: "Estimated hours as string (e.g., '480.00')" },
               actualHours: { type: "string", description: "Actual hours as string" },
-              discipline: { 
-                type: "string", 
+              discipline: {
+                type: "string",
                 description: "FLEXIBLE: Any discipline text is accepted (e.g., 'management', 'engineering', 'procurement'). Known values auto-map to standard categories. Original text preserved for reporting.",
                 examples: ["management", "engineering", "civil", "mechanical", "electrical", "procurement", "construction"]
               }
@@ -2668,10 +2668,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stakeholderRole: { "'owner' → 'sponsor'": true, "'customer' → 'client'": true, "'regulator' → 'regulatory'": true }
       }
     };
-    
+
     res.json(schema);
   });
-  
+
   // Get example template for import
   app.get('/api/import/template', (req, res) => {
     const template = {
@@ -2789,24 +2789,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         labelManagement: "After import, use Label Management to normalize discipline/assignee values for consistency."
       }
     };
-    
+
     res.json(template);
   });
-  
+
   // Validate import data without importing
   app.post('/api/import/validate', (req, res) => {
     const importData = req.body;
     const errors: string[] = [];
     const warnings: string[] = [];
-    
+
     if (!importData?.version) {
       errors.push("Missing required field: version");
     }
-    
+
     if (!importData?.project?.name) {
       errors.push("Missing required field: project.name");
     }
-    
+
     // Validate tasks
     if (importData?.tasks) {
       importData.tasks.forEach((task: any, index: number) => {
@@ -2825,7 +2825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     // Validate risks
     if (importData?.risks) {
       importData.risks.forEach((risk: any, index: number) => {
@@ -2843,7 +2843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     // Validate issues
     if (importData?.issues) {
       importData.issues.forEach((issue: any, index: number) => {
@@ -2856,7 +2856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     }
-    
+
     res.json({
       valid: errors.length === 0,
       errors,
@@ -2870,7 +2870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
-  
+
   // Input sanitization utilities for flexible text fields
   const sanitizeText = (input: any, maxLength: number = 100): string | null => {
     if (input === null || input === undefined) return null;
@@ -2884,13 +2884,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .slice(0, maxLength); // Enforce length limit
     return sanitized || null;
   };
-  
+
   // Validate text contains only safe characters
   const isValidLabel = (input: string): boolean => {
     // Allow alphanumeric, spaces, hyphens, underscores, dots, parentheses
     return /^[\w\s\-_.()\/&]+$/i.test(input);
   };
-  
+
   // Helper to try enum mapping, return null if not valid (for flexible import)
   const tryMapEnum = (category: string, value: string, validValues: string[]): string | null => {
     if (!value) return null;
@@ -2904,23 +2904,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const importData = req.body;
       const errors: string[] = [];
       const warnings: string[] = [];
-      
+
       if (!importData || !importData.version) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
           message: "Invalid import format. Missing 'version' field.",
           hint: "Get the correct format from GET /api/import/schema or GET /api/import/template"
         });
       }
-      
+
       // Helper to map values with fallback - for strict enum fields
       const mapValue = (category: string, value: string, validValues: string[], defaultValue: string): string => {
         if (!value) return defaultValue;
@@ -2934,14 +2934,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         warnings.push(`Unknown ${category}: '${value}', using '${defaultValue}'`);
         return defaultValue;
       };
-      
+
       // Helper to get parent WBS code
       const getParentWbsCode = (wbsCode: string): string | null => {
         const parts = wbsCode.split('.');
         if (parts.length <= 1) return null;
         return parts.slice(0, -1).join('.');
       };
-      
+
       let importedCounts = {
         tasks: 0,
         risks: 0,
@@ -2949,43 +2949,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stakeholders: 0,
         costItems: 0
       };
-      
+
       // Build WBS code to task ID map for hierarchy
       const wbsToTaskId: Record<string, number> = {};
-      
+
       // Sort tasks by WBS code depth to ensure parents are created first
       const sortedTasks = [...(importData.tasks || [])].sort((a: any, b: any) => {
         const aDepth = (a.wbsCode || '').split('.').length;
         const bDepth = (b.wbsCode || '').split('.').length;
         return aDepth - bDepth;
       });
-      
+
       // Import tasks with hierarchy and flexible text fields
       for (const task of sortedTasks) {
         try {
           const wbsCode = task.wbsCode || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           const parentWbsCode = getParentWbsCode(wbsCode);
           const parentId = parentWbsCode ? wbsToTaskId[parentWbsCode] : null;
-          
+
           // Map strict enums with fallbacks
           const mappedPriority = mapValue('taskPriority', task.priority, importEnums.taskPriority, 'medium');
           const mappedStatus = task.status && importEnums.taskStatus.includes(task.status) ? task.status : 'not-started';
-          
+
           // Try to map discipline to valid enum, otherwise store as flexible label
           const disciplineEnumValue = tryMapEnum('discipline', task.discipline, importEnums.discipline);
           const disciplineLabelValue = sanitizeText(task.discipline, 100);
-          
+
           // If discipline isn't a valid enum, store the original as disciplineLabel
           if (task.discipline && !disciplineEnumValue && disciplineLabelValue) {
             warnings.push(`Task '${task.name}': discipline '${task.discipline}' stored as label (not in standard list)`);
           }
-          
+
           // Sanitize assignedTo - store as text label, don't try to link to user FK
           const assignedToName = sanitizeText(task.assignedTo || task.assignee, 100);
           if (assignedToName && !isValidLabel(assignedToName)) {
             warnings.push(`Task '${task.name}': assignedTo contains invalid characters, sanitized`);
           }
-          
+
           const createdTask = await storage.createTask({
             projectId,
             parentId,
@@ -3008,23 +3008,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Store original discipline text as label for flexibility
             disciplineLabel: disciplineLabelValue
           });
-          
+
           wbsToTaskId[wbsCode] = createdTask.id;
           importedCounts.tasks++;
         } catch (taskError: any) {
           errors.push(`Failed to import task '${task.name || task.wbsCode}': ${taskError.message}`);
         }
       }
-      
+
       // Import risks
+      let riskCounter = 1;
       if (importData.risks && Array.isArray(importData.risks)) {
         for (const risk of importData.risks) {
           try {
             const mappedStatus = mapValue('riskStatus', risk.status, importEnums.riskStatus, 'identified');
             const mappedImpact = mapValue('riskImpact', risk.impact, importEnums.riskImpact, 'medium');
-            
+
+            // Auto-generate code if not provided
+            const riskCode = risk.code || `RISK-${String(riskCounter++).padStart(3, '0')}`;
+
             await storage.createRisk({
               projectId,
+              code: riskCode,
               title: risk.title || 'Untitled Risk',
               description: risk.description,
               category: risk.category || 'other',
@@ -3040,22 +3045,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Import issues
+      let issueCounter = 1;
       if (importData.issues && Array.isArray(importData.issues)) {
         for (const issue of importData.issues) {
           try {
             const mappedStatus = issue.status && importEnums.issueStatus.includes(issue.status) ? issue.status : 'open';
             const mappedPriority = mapValue('issuePriority', issue.priority, importEnums.issuePriority, 'medium');
-            
+
+            // Auto-generate code if not provided
+            const issueCode = issue.code || `ISS-${String(issueCounter++).padStart(3, '0')}`;
+
             await storage.createIssue({
               projectId,
+              code: issueCode,
               title: issue.title || 'Untitled Issue',
               description: issue.description,
               priority: mappedPriority as "low" | "medium" | "high" | "critical",
               status: mappedStatus as "open" | "in-progress" | "resolved" | "closed",
               assignedTo: issue.assignedTo || null,
-              reportedBy: issue.reportedBy || null,
+              reportedBy: issue.reportedBy || userId, // Use current user if not specified
               resolution: issue.resolution || null
             });
             importedCounts.issues++;
@@ -3064,13 +3074,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Import stakeholders
       if (importData.stakeholders && Array.isArray(importData.stakeholders)) {
         for (const stakeholder of importData.stakeholders) {
           try {
             const mappedRole = mapValue('stakeholderRole', stakeholder.role, importEnums.stakeholderRole, 'other');
-            
+
             await storage.createStakeholder({
               projectId,
               name: stakeholder.name || 'Unknown Stakeholder',
@@ -3087,13 +3097,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Import cost items
       if (importData.costItems && Array.isArray(importData.costItems)) {
         for (const costItem of importData.costItems) {
           try {
             const mappedCategory = costItem.category && importEnums.costCategory.includes(costItem.category) ? costItem.category : 'other';
-            
+
             await storage.createCostItem({
               projectId,
               description: costItem.description || costItem.name || 'Unnamed Cost',
@@ -3108,19 +3118,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       res.json({
         success: errors.length === 0,
         imported: importedCounts,
         errors: errors.length > 0 ? errors : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
-        message: errors.length === 0 
+        message: errors.length === 0
           ? `Successfully imported ${importedCounts.tasks} tasks, ${importedCounts.risks} risks, ${importedCounts.issues} issues, ${importedCounts.stakeholders} stakeholders, ${importedCounts.costItems} cost items`
           : `Import completed with ${errors.length} error(s)`
       });
     } catch (error: any) {
       console.error("Error importing project:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: "Failed to import project",
         error: error.message,
@@ -3130,22 +3140,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Label Management API Routes =====
-  
+
   // Get unique discipline labels used in a project
   app.get('/api/projects/:projectId/labels/disciplines', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const tasks = await storage.getTasksByProject(projectId);
-      
+
       // Get unique discipline labels and counts
       const disciplineStats: Record<string, { enum: string | null, label: string | null, count: number }> = {};
-      
+
       for (const task of tasks) {
         const key = (task as any).disciplineLabel || task.discipline || 'general';
         if (!disciplineStats[key]) {
@@ -3157,7 +3167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         disciplineStats[key].count++;
       }
-      
+
       res.json({
         disciplines: Object.entries(disciplineStats).map(([value, stats]) => ({
           value,
@@ -3172,22 +3182,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get discipline labels" });
     }
   });
-  
+
   // Get unique assignee names used in a project
   app.get('/api/projects/:projectId/labels/assignees', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const tasks = await storage.getTasksByProject(projectId);
-      
+
       // Get unique assignee names and counts
       const assigneeStats: Record<string, { userId: string | null, name: string | null, count: number }> = {};
-      
+
       for (const task of tasks) {
         const name = (task as any).assignedToName;
         if (name) {
@@ -3201,7 +3211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assigneeStats[name].count++;
         }
       }
-      
+
       res.json({
         assignees: Object.entries(assigneeStats).map(([value, stats]) => ({
           value,
@@ -3215,38 +3225,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get assignee labels" });
     }
   });
-  
+
   // Bulk update discipline labels (find and replace)
   app.post('/api/projects/:projectId/labels/disciplines/replace', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const { oldValue, newValue, updateEnum } = req.body;
-      
+
       if (!oldValue || !newValue) {
         return res.status(400).json({ message: "Both oldValue and newValue are required" });
       }
-      
+
       // Sanitize the new value
       const sanitizedNew = sanitizeText(newValue, 100);
       if (!sanitizedNew) {
         return res.status(400).json({ message: "Invalid newValue after sanitization" });
       }
-      
+
       const tasks = await storage.getTasksByProject(projectId);
       let updatedCount = 0;
-      
+
       for (const task of tasks) {
         const currentLabel = (task as any).disciplineLabel;
         if (currentLabel === oldValue) {
           // Determine if new value maps to a valid enum
           const newEnumValue = tryMapEnum('discipline', sanitizedNew.toLowerCase(), importEnums.discipline);
-          
+
           await storage.updateTask(task.id, {
             disciplineLabel: sanitizedNew,
             discipline: updateEnum && newEnumValue ? newEnumValue as any : task.discipline
@@ -3254,7 +3264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedCount++;
         }
       }
-      
+
       res.json({
         success: true,
         message: `Updated ${updatedCount} task(s)`,
@@ -3265,32 +3275,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to replace discipline labels" });
     }
   });
-  
+
   // Bulk update assignee names (find and replace)
   app.post('/api/projects/:projectId/labels/assignees/replace', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const { oldValue, newValue, linkToUserId } = req.body;
-      
+
       if (!oldValue || !newValue) {
         return res.status(400).json({ message: "Both oldValue and newValue are required" });
       }
-      
+
       // Sanitize the new value
       const sanitizedNew = sanitizeText(newValue, 100);
       if (!sanitizedNew) {
         return res.status(400).json({ message: "Invalid newValue after sanitization" });
       }
-      
+
       const tasks = await storage.getTasksByProject(projectId);
       let updatedCount = 0;
-      
+
       for (const task of tasks) {
         const currentName = (task as any).assignedToName;
         if (currentName === oldValue) {
@@ -3301,7 +3311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedCount++;
         }
       }
-      
+
       res.json({
         success: true,
         message: `Updated ${updatedCount} task(s)`,
@@ -3314,7 +3324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== PDF Report Generation Routes =====
-  
+
   // Helper to send PDF response
   const sendPdfResponse = (res: Response, pdfDoc: PDFKit.PDFDocument, filename: string) => {
     res.setHeader('Content-Type', 'application/pdf');
@@ -3328,27 +3338,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const risks = await storage.getRisksByProject(projectId);
       const user = await storage.getUser(userId);
-      
+
       const pdfDoc = generateRiskRegisterReport({
         project,
         risks,
-        generatedBy: user?.firstName && user?.lastName 
-          ? `${user.firstName} ${user.lastName}` 
+        generatedBy: user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
           : user?.email || 'System'
       });
-      
+
       const filename = `${project.code}_Risk_Register_${new Date().toISOString().split('T')[0]}.pdf`;
       sendPdfResponse(res, pdfDoc, filename);
     } catch (error) {
@@ -3362,36 +3372,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const [tasks, risks, issues, costItems] = await Promise.all([
         storage.getTasksByProject(projectId),
         storage.getRisksByProject(projectId),
         storage.getIssuesByProject(projectId),
         storage.getCostItemsByProject(projectId)
       ]);
-      
+
       const user = await storage.getUser(userId);
-      
+
       const pdfDoc = generateProjectStatusReport({
         project,
         tasks,
         risks,
         issues,
         costItems,
-        generatedBy: user?.firstName && user?.lastName 
-          ? `${user.firstName} ${user.lastName}` 
+        generatedBy: user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
           : user?.email || 'System'
       });
-      
+
       const filename = `${project.code}_Status_Report_${new Date().toISOString().split('T')[0]}.pdf`;
       sendPdfResponse(res, pdfDoc, filename);
     } catch (error) {
@@ -3405,32 +3415,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const [tasks, costItems] = await Promise.all([
         storage.getTasksByProject(projectId),
         storage.getCostItemsByProject(projectId)
       ]);
-      
+
       const user = await storage.getUser(userId);
-      
+
       const pdfDoc = generateEVAReport({
         project,
         tasks,
         costItems,
-        generatedBy: user?.firstName && user?.lastName 
-          ? `${user.firstName} ${user.lastName}` 
+        generatedBy: user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
           : user?.email || 'System'
       });
-      
+
       const filename = `${project.code}_EVA_Report_${new Date().toISOString().split('T')[0]}.pdf`;
       sendPdfResponse(res, pdfDoc, filename);
     } catch (error) {
@@ -3444,27 +3454,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const issues = await storage.getIssuesByProject(projectId);
       const user = await storage.getUser(userId);
-      
+
       const pdfDoc = generateIssueLogReport({
         project,
         issues,
-        generatedBy: user?.firstName && user?.lastName 
-          ? `${user.firstName} ${user.lastName}` 
+        generatedBy: user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
           : user?.email || 'System'
       });
-      
+
       const filename = `${project.code}_Issue_Log_${new Date().toISOString().split('T')[0]}.pdf`;
       sendPdfResponse(res, pdfDoc, filename);
     } catch (error) {
@@ -3474,7 +3484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =============== EMAIL TEMPLATES ROUTES ===============
-  
+
   // Get all default email templates (for reference)
   app.get('/api/email-templates/defaults', isAuthenticated, async (req: any, res) => {
     try {
@@ -3503,11 +3513,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const templates = await storage.getEmailTemplatesByOrganization(orgId);
       res.json(templates);
     } catch (error) {
@@ -3522,16 +3532,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const templateId = parseInt(req.params.id);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const template = await storage.getEmailTemplate(templateId);
       if (!template || template.organizationId !== orgId) {
         return res.status(404).json({ message: "Template not found" });
       }
-      
+
       res.json(template);
     } catch (error) {
       console.error("Error getting email template:", error);
@@ -3544,22 +3554,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const parsed = insertEmailTemplateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid data", errors: parsed.error.issues });
       }
-      
+
       const template = await storage.createEmailTemplate({
         ...parsed.data,
         organizationId: orgId,
         createdBy: userId
       });
-      
+
       res.status(201).json(template);
     } catch (error) {
       console.error("Error creating email template:", error);
@@ -3573,21 +3583,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const templateId = parseInt(req.params.id);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const existing = await storage.getEmailTemplate(templateId);
       if (!existing || existing.organizationId !== orgId) {
         return res.status(404).json({ message: "Template not found" });
       }
-      
+
       const parsed = updateEmailTemplateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid data", errors: parsed.error.issues });
       }
-      
+
       const updated = await storage.updateEmailTemplate(templateId, parsed.data);
       res.json(updated);
     } catch (error) {
@@ -3602,16 +3612,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const templateId = parseInt(req.params.id);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const existing = await storage.getEmailTemplate(templateId);
       if (!existing || existing.organizationId !== orgId) {
         return res.status(404).json({ message: "Template not found" });
       }
-      
+
       await storage.deleteEmailTemplate(templateId);
       res.status(204).send();
     } catch (error) {
@@ -3626,20 +3636,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const templateId = parseInt(req.params.id);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const template = await storage.getEmailTemplate(templateId);
       if (!template || template.organizationId !== orgId) {
         return res.status(404).json({ message: "Template not found" });
       }
-      
+
       const placeholders = req.body.placeholders || {};
       const previewSubject = replacePlaceholders(template.subject, placeholders);
       const previewBody = replacePlaceholders(template.body, placeholders);
-      
+
       res.json({
         subject: previewSubject,
         body: previewBody
@@ -3656,24 +3666,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const templateId = parseInt(req.params.id);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const template = await storage.getEmailTemplate(templateId);
       if (!template || template.organizationId !== orgId) {
         return res.status(404).json({ message: "Template not found" });
       }
-      
+
       const { toEmail, placeholders = {} } = req.body;
       if (!toEmail) {
         return res.status(400).json({ message: "Email address required" });
       }
-      
+
       const subject = replacePlaceholders(template.subject, placeholders);
       const body = replacePlaceholders(template.body, placeholders);
-      
+
       // Log the email to the database
       const sentEmail = await storage.createSentEmail({
         organizationId: orgId,
@@ -3682,7 +3692,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subject,
         status: 'pending'
       });
-      
+
       // Send via SendGrid
       const result = await sendEmail({
         to: toEmail,
@@ -3691,22 +3701,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         templateId,
         organizationId: orgId
       });
-      
+
       // Update status
       await storage.updateSentEmailStatus(
-        sentEmail.id, 
+        sentEmail.id,
         result.success ? 'sent' : 'failed',
         result.error
       );
-      
+
       // Increment usage counter
       if (result.success) {
         await storage.incrementEmailUsage(orgId);
       }
-      
-      res.json({ 
-        success: result.success, 
-        message: result.success ? 'Test email sent' : result.error 
+
+      res.json({
+        success: result.success,
+        message: result.success ? 'Test email sent' : result.error
       });
     } catch (error) {
       console.error("Error sending test email:", error);
@@ -3719,11 +3729,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const limit = parseInt(req.query.limit as string) || 100;
       const sentEmails = await storage.getSentEmailsByOrganization(orgId, limit);
       res.json(sentEmails);
@@ -3738,14 +3748,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const month = new Date().toISOString().slice(0, 7);
       const usage = await storage.getEmailUsage(orgId, month);
-      
+
       res.json({
         month,
         emailsSent: usage?.emailsSent || 0,
@@ -3766,80 +3776,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== File Upload Routes =====
-  
+
   // Get upload URL for a project file
   app.post('/api/projects/:projectId/files/upload-url', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const { fileSize } = req.body;
       if (!fileSize || typeof fileSize !== 'number') {
         return res.status(400).json({ message: "fileSize is required" });
       }
-      
+
       // Check quota
       const quota = await storage.getStorageQuota(project.organizationId);
       const currentUsed = quota?.usedBytes || 0;
       const maxQuota = quota?.quotaBytes || 1073741824; // 1GB default
-      
+
       if (currentUsed + fileSize > maxQuota) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "Storage quota exceeded",
           currentUsed,
           maxQuota,
           requested: fileSize
         });
       }
-      
+
       const { ObjectStorageService } = await import('./objectStorage');
       const objectStorage = new ObjectStorageService();
       const { uploadURL, objectId } = await objectStorage.getObjectEntityUploadURL(
-        project.organizationId, 
+        project.organizationId,
         projectId
       );
-      
+
       res.json({ uploadURL, objectId });
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ message: "Failed to get upload URL" });
     }
   });
-  
+
   // Register uploaded file after upload completes
   app.post('/api/projects/:projectId/files', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const project = await storage.getProject(projectId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const { name, originalName, mimeType, size, objectPath, category, description } = req.body;
-      
+
       if (!name || !originalName || !mimeType || !size || !objectPath) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-      
+
       // Set ACL policy on the uploaded object
       const { ObjectStorageService } = await import('./objectStorage');
       const objectStorage = new ObjectStorageService();
-      
+
       try {
         await objectStorage.trySetObjectEntityAclPolicy(objectPath, {
           owner: userId,
@@ -3849,7 +3859,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (aclError) {
         console.error("Error setting ACL policy:", aclError);
       }
-      
+
       // Create file record
       const file = await storage.createProjectFile({
         projectId,
@@ -3863,30 +3873,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description,
         uploadedBy: userId
       });
-      
+
       // Update storage quota
       await storage.incrementStorageUsage(project.organizationId, size);
-      
+
       // Notify via WebSocket
       wsManager.notifyProjectUpdate(projectId, 'file-created', file, userId);
-      
+
       res.status(201).json(file);
     } catch (error) {
       console.error("Error creating file:", error);
       res.status(500).json({ message: "Failed to create file" });
     }
   });
-  
+
   // Get project files
   app.get('/api/projects/:projectId/files', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const files = await storage.getProjectFilesByProject(projectId);
       res.json(files);
     } catch (error) {
@@ -3894,53 +3904,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get files" });
     }
   });
-  
+
   // Update project file
   app.patch('/api/projects/:projectId/files/:fileId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const existingFile = await storage.getProjectFile(fileId);
       if (!existingFile || existingFile.projectId !== projectId) {
         return res.status(404).json({ message: "File not found" });
       }
-      
+
       const { name, category, description } = req.body;
       const updated = await storage.updateProjectFile(fileId, { name, category, description });
-      
+
       wsManager.notifyProjectUpdate(projectId, 'file-updated', updated, userId);
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating file:", error);
       res.status(500).json({ message: "Failed to update file" });
     }
   });
-  
+
   // Delete project file
   app.delete('/api/projects/:projectId/files/:fileId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
       const fileId = parseInt(req.params.fileId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const existingFile = await storage.getProjectFile(fileId);
       if (!existingFile || existingFile.projectId !== projectId) {
         return res.status(404).json({ message: "File not found" });
       }
-      
+
       const project = await storage.getProject(projectId);
-      
+
       // Delete from object storage
       const { ObjectStorageService } = await import('./objectStorage');
       const objectStorage = new ObjectStorageService();
@@ -3949,38 +3959,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (deleteError) {
         console.error("Error deleting from object storage:", deleteError);
       }
-      
+
       // Delete from database
       await storage.deleteProjectFile(fileId);
-      
+
       // Update storage quota
       if (project) {
         await storage.decrementStorageUsage(project.organizationId, existingFile.size);
       }
-      
+
       wsManager.notifyProjectUpdate(projectId, 'file-deleted', { id: fileId }, userId);
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting file:", error);
       res.status(500).json({ message: "Failed to delete file" });
     }
   });
-  
+
   // Serve private object files (with access control)
   app.get('/objects/:objectPath(*)', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const objectPath = `/objects/${req.params.objectPath}`;
-      
+
       const { ObjectStorageService, ObjectNotFoundError } = await import('./objectStorage');
       const { ObjectPermission } = await import('./objectAcl');
       const objectStorage = new ObjectStorageService();
-      
+
       // Get user's organization IDs for ACL check
       const userOrgs = await storage.getUserOrganizations(userId);
       const userOrgIds = userOrgs.map(uo => uo.organizationId);
-      
+
       const objectFile = await objectStorage.getObjectEntityFile(objectPath);
       const canAccess = await objectStorage.canAccessObjectEntity({
         objectFile,
@@ -3988,11 +3998,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requestedPermission: ObjectPermission.READ,
         userOrganizationIds: userOrgIds
       });
-      
+
       if (!canAccess) {
         return res.status(401).json({ message: "Access denied" });
       }
-      
+
       objectStorage.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error serving object:", error);
@@ -4002,19 +4012,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to serve file" });
     }
   });
-  
+
   // Get storage quota for organization
   app.get('/api/organizations/:orgId/storage', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const quota = await storage.getStorageQuota(orgId);
-      
+
       res.json({
         usedBytes: quota?.usedBytes || 0,
         quotaBytes: quota?.quotaBytes || 1073741824,
@@ -4027,38 +4037,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Cloud Storage Routes =====
-  
+
   // Get available cloud storage providers
   app.get('/api/cloud-storage/providers', isAuthenticated, async (req: any, res) => {
     try {
       const { CLOUD_PROVIDERS } = await import('./cloudStorage');
-      
+
       const providers = Object.entries(CLOUD_PROVIDERS).map(([key, config]) => ({
         id: key,
         name: config.displayName,
         icon: config.icon,
         configured: !!(process.env[config.clientIdEnv] && process.env[config.clientSecretEnv])
       }));
-      
+
       res.json(providers);
     } catch (error) {
       console.error("Error getting providers:", error);
       res.status(500).json({ message: "Failed to get cloud storage providers" });
     }
   });
-  
+
   // Get cloud storage connections for organization
   app.get('/api/organizations/:orgId/cloud-storage', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const connections = await storage.getCloudStorageConnectionsByOrganization(orgId);
-      
+
       // Don't expose tokens to frontend
       const safeConnections = connections.map(conn => ({
         id: conn.id,
@@ -4072,37 +4082,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         syncError: conn.syncError,
         createdAt: conn.createdAt
       }));
-      
+
       res.json(safeConnections);
     } catch (error) {
       console.error("Error getting cloud storage connections:", error);
       res.status(500).json({ message: "Failed to get cloud storage connections" });
     }
   });
-  
+
   // Get OAuth authorization URL for cloud provider
   app.post('/api/organizations/:orgId/cloud-storage/auth-url', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const { provider } = req.body;
       if (!provider) {
         return res.status(400).json({ message: "Provider is required" });
       }
-      
+
       // Check if already connected
       const existing = await storage.getCloudStorageConnectionByProvider(orgId, provider);
       if (existing) {
         return res.status(400).json({ message: "Provider already connected. Disconnect first." });
       }
-      
+
       const { getAuthorizationUrl } = await import('./cloudStorage');
-      
+
       // Create HMAC-signed state token for OAuth security
       const statePayload = JSON.stringify({
         organizationId: orgId,
@@ -4117,59 +4127,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update(statePayloadBase64)
         .digest('hex');
       const state = `${statePayloadBase64}.${stateSignature}`;
-      
+
       const redirectUri = `${req.protocol}://${req.get('host')}/api/cloud-storage/callback`;
       const authUrl = getAuthorizationUrl(provider, state, redirectUri);
-      
+
       res.json({ authUrl, state });
     } catch (error) {
       console.error("Error generating auth URL:", error);
       res.status(500).json({ message: "Failed to generate authorization URL" });
     }
   });
-  
+
   // OAuth callback handler
   app.get('/api/cloud-storage/callback', async (req: any, res) => {
     try {
       const { code, state, error: oauthError } = req.query;
-      
+
       if (oauthError) {
         return res.redirect(`/settings?error=${encodeURIComponent(oauthError)}`);
       }
-      
+
       if (!code || !state) {
         return res.redirect('/settings?error=invalid_callback');
       }
-      
+
       // Verify HMAC-signed state
       const stateParts = (state as string).split('.');
       if (stateParts.length !== 2) {
         return res.redirect('/settings?error=invalid_state');
       }
-      
+
       const [statePayloadBase64, providedSignature] = stateParts;
       const stateSecret = process.env.SESSION_SECRET || 'oauth-state-secret';
       const expectedSignature = crypto
         .createHmac('sha256', stateSecret)
         .update(statePayloadBase64)
         .digest('hex');
-      
+
       // Reject if signature lengths don't match (SHA256 HMAC is always 64 hex chars)
       if (providedSignature.length !== 64 || expectedSignature.length !== 64) {
         console.error("OAuth state invalid signature length");
         return res.redirect('/settings?error=invalid_state');
       }
-      
+
       // Use timing-safe comparison to prevent timing attacks
       const providedBuffer = Buffer.from(providedSignature, 'hex');
       const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-      
-      if (providedBuffer.length !== expectedBuffer.length || 
-          !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
+
+      if (providedBuffer.length !== expectedBuffer.length ||
+        !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
         console.error("OAuth state signature mismatch - potential tampering");
         return res.redirect('/settings?error=invalid_state');
       }
-      
+
       // Decode state payload
       let stateData;
       try {
@@ -4177,19 +4187,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {
         return res.redirect('/settings?error=invalid_state');
       }
-      
+
       const { organizationId, userId, provider } = stateData;
-      
+
       // Verify state timestamp (5 minute expiry)
       if (Date.now() - stateData.timestamp > 5 * 60 * 1000) {
         return res.redirect('/settings?error=state_expired');
       }
-      
+
       const { exchangeCodeForTokens, getCloudStorageProvider, CLOUD_PROVIDERS } = await import('./cloudStorage');
-      
+
       const redirectUri = `${req.protocol}://${req.get('host')}/api/cloud-storage/callback`;
       const tokens = await exchangeCodeForTokens(provider, code as string, redirectUri);
-      
+
       // Create connection record
       const connection = await storage.createCloudStorageConnection({
         organizationId,
@@ -4200,12 +4210,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokenExpiresAt: tokens.expiresAt,
         syncEnabled: true
       });
-      
+
       // Get user info from provider
       try {
         const providerInstance = getCloudStorageProvider(connection);
         const userInfo = await providerInstance.getUserInfo();
-        
+
         await storage.updateCloudStorageConnection(connection.id, {
           accountEmail: userInfo.email,
           accountName: userInfo.name
@@ -4213,43 +4223,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (e) {
         console.error("Error getting user info:", e);
       }
-      
+
       res.redirect(`/settings?success=cloud_storage_connected&provider=${provider}`);
     } catch (error) {
       console.error("OAuth callback error:", error);
       res.redirect('/settings?error=oauth_failed');
     }
   });
-  
+
   // Disconnect cloud storage provider
   app.delete('/api/organizations/:orgId/cloud-storage/:connectionId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
       const connectionId = parseInt(req.params.connectionId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const connection = await storage.getCloudStorageConnection(connectionId);
       if (!connection || connection.organizationId !== orgId) {
         return res.status(404).json({ message: "Connection not found" });
       }
-      
+
       // Delete synced files first
       await storage.deleteCloudSyncedFilesByConnection(connectionId);
-      
+
       // Delete connection
       await storage.deleteCloudStorageConnection(connectionId);
-      
+
       res.json({ message: "Cloud storage disconnected" });
     } catch (error) {
       console.error("Error disconnecting cloud storage:", error);
       res.status(500).json({ message: "Failed to disconnect cloud storage" });
     }
   });
-  
+
   // Trigger sync for cloud storage connection
   app.post('/api/organizations/:orgId/cloud-storage/:connectionId/sync', isAuthenticated, async (req: any, res) => {
     try {
@@ -4257,27 +4267,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = parseInt(req.params.orgId);
       const connectionId = parseInt(req.params.connectionId);
       const { projectId } = req.body;
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       if (!projectId) {
         return res.status(400).json({ message: "Project ID is required" });
       }
-      
+
       const connection = await storage.getCloudStorageConnection(connectionId);
       if (!connection || connection.organizationId !== orgId) {
         return res.status(404).json({ message: "Connection not found" });
       }
-      
+
       if (!connection.syncEnabled) {
         return res.status(400).json({ message: "Sync is disabled for this connection" });
       }
-      
+
       const { syncCloudFiles } = await import('./cloudStorage');
       const stats = await syncCloudFiles(connection, projectId);
-      
+
       res.json({
         message: "Sync completed",
         added: stats.added,
@@ -4289,7 +4299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to sync cloud storage" });
     }
   });
-  
+
   // List files from cloud storage
   app.get('/api/organizations/:orgId/cloud-storage/:connectionId/files', isAuthenticated, async (req: any, res) => {
     try {
@@ -4297,37 +4307,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = parseInt(req.params.orgId);
       const connectionId = parseInt(req.params.connectionId);
       const { folderId } = req.query;
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const connection = await storage.getCloudStorageConnection(connectionId);
       if (!connection || connection.organizationId !== orgId) {
         return res.status(404).json({ message: "Connection not found" });
       }
-      
+
       const { getCloudStorageProvider } = await import('./cloudStorage');
       const provider = getCloudStorageProvider(connection);
       const files = await provider.listFiles(folderId as string | undefined);
-      
+
       res.json(files);
     } catch (error) {
       console.error("Error listing cloud files:", error);
       res.status(500).json({ message: "Failed to list cloud files" });
     }
   });
-  
+
   // Get synced files for a project
   app.get('/api/projects/:projectId/cloud-files', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const files = await storage.getCloudSyncedFilesByProject(projectId);
       res.json(files);
     } catch (error) {
@@ -4337,7 +4347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== SUBSCRIPTION & USAGE ROUTES ====================
-  
+
   // Get all subscription plans
   app.get('/api/subscription-plans', isAuthenticated, async (_req, res) => {
     try {
@@ -4348,64 +4358,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get subscription plans" });
     }
   });
-  
+
   // Get organization subscription and usage
   app.get('/api/organizations/:orgId/subscription', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const subscription = await storage.getOrganizationSubscription(orgId);
       let plan = null;
-      
+
       if (subscription) {
         plan = await storage.getSubscriptionPlan(subscription.planId);
       } else {
         plan = await storage.getSubscriptionPlanByTier('free');
       }
-      
+
       res.json({ subscription, plan });
     } catch (error) {
       console.error("Error getting subscription:", error);
       res.status(500).json({ message: "Failed to get subscription" });
     }
   });
-  
+
   // Get organization usage statistics
   app.get('/api/organizations/:orgId/usage', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const orgId = parseInt(req.params.orgId);
-      
+
       if (!await checkOrganizationAccess(userId, orgId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      
+
       const [storageQuota, aiUsage, emailUsage, subscription] = await Promise.all([
         storage.getStorageQuota(orgId),
         storage.getAiUsageSummary(orgId, currentMonth),
         storage.getEmailUsage(orgId, currentMonth),
         storage.getOrganizationSubscription(orgId)
       ]);
-      
+
       let plan = null;
       if (subscription) {
         plan = await storage.getSubscriptionPlan(subscription.planId);
       } else {
         plan = await storage.getSubscriptionPlanByTier('free');
       }
-      
+
       const projects = await storage.getProjectsByOrganization(orgId);
       const userOrgs = await storage.getUserOrganizations(userId);
       const orgMembers = userOrgs.filter(uo => uo.organizationId === orgId);
-      
+
       res.json({
         storage: {
           usedBytes: storageQuota?.usedBytes || 0,
@@ -4443,7 +4453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get usage statistics" });
     }
   });
-  
+
   // Initialize default subscription plans (admin only - can be called once)
   app.post('/api/admin/init-subscription-plans', isAuthenticated, async (_req, res) => {
     try {
@@ -4451,7 +4461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingPlans.length > 0) {
         return res.status(400).json({ message: "Plans already initialized" });
       }
-      
+
       const defaultPlans = [
         {
           tier: 'free' as const,
@@ -4522,13 +4532,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isActive: true
         }
       ];
-      
+
       const createdPlans = [];
       for (const plan of defaultPlans) {
         const created = await storage.createSubscriptionPlan(plan);
         createdPlans.push(created);
       }
-      
+
       res.json({ message: "Subscription plans initialized", plans: createdPlans });
     } catch (error) {
       console.error("Error initializing subscription plans:", error);
@@ -4542,18 +4552,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const user = await storage.getUser(userId);
-      
+
       // For now, check if user is an admin of any organization (in production, use a separate admin flag)
       const orgs = await storage.getOrganizationsByUser(userId);
       const isOrgAdmin = orgs.some(org => {
         // Check if user is owner/admin role
         return true; // For MVP, any authenticated user with orgs can view admin stats
       });
-      
+
       if (!isOrgAdmin) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       next();
     } catch (error) {
       console.error("Admin auth error:", error);
@@ -4566,23 +4576,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get platform-wide statistics
       const organizations = await storage.getAllOrganizations();
       const allUsers = await storage.getAllUsers();
-      
+
       let totalProjects = 0;
       let totalTasks = 0;
       let totalStorage = 0;
       let totalAiTokens = 0;
       let totalEmails = 0;
       const subscriptionCounts = { free: 0, pro: 0, enterprise: 0 };
-      
+
       for (const org of organizations) {
         const projects = await storage.getProjectsByOrganization(org.id);
         totalProjects += projects.length;
-        
+
         for (const project of projects) {
           const tasks = await storage.getTasksByProject(project.id);
           totalTasks += tasks.length;
         }
-        
+
         // Get subscription info
         const subscription = await storage.getOrganizationSubscription(org.id);
         if (subscription) {
@@ -4594,7 +4604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             else if (tier === 'enterprise') subscriptionCounts.enterprise++;
             else subscriptionCounts.free++;
           }
-          
+
           // Get usage stats
           const usage = await storage.getOrganizationUsage(subscription.id);
           if (usage) {
@@ -4606,7 +4616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionCounts.free++;
         }
       }
-      
+
       res.json({
         organizations: organizations.length,
         users: allUsers.length,
@@ -4626,15 +4636,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/organizations', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const organizations = await storage.getAllOrganizations();
-      
+
       const orgSummaries = await Promise.all(organizations.map(async (org) => {
         const users = await storage.getUsersByOrganization(org.id);
         const projects = await storage.getProjectsByOrganization(org.id);
-        
+
         let storageUsedMB = 0;
         let storageLimitMB = 1024; // Default 1GB
         let tier = 'free';
-        
+
         const subscription = await storage.getOrganizationSubscription(org.id);
         if (subscription) {
           const plan = await storage.getSubscriptionPlan(subscription.planId);
@@ -4642,13 +4652,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storageLimitMB = plan.storageQuotaBytes / (1024 * 1024);
             tier = plan.tier;
           }
-          
+
           const usage = await storage.getOrganizationUsage(subscription.id);
           if (usage) {
             storageUsedMB = usage.storageUsedBytes / (1024 * 1024);
           }
         }
-        
+
         return {
           id: org.id,
           name: org.name,
@@ -4659,7 +4669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           storageLimitMB
         };
       }));
-      
+
       res.json(orgSummaries);
     } catch (error) {
       console.error("Error fetching admin organizations:", error);
@@ -4672,23 +4682,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       // Get project for start date
       const project = await storage.getProject(projectId);
       const startDate = project?.startDate ? new Date(project.startDate) : new Date();
-      
+
       // Run scheduling
       const { schedulingService } = await import('./scheduling');
       const result = await schedulingService.runSchedule(projectId, startDate);
-      
+
       if (result.success) {
         wsManager.notifyProjectUpdate(projectId, "schedule-updated", result, userId);
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error running schedule:", error);
@@ -4700,14 +4710,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const { schedulingService } = await import('./scheduling');
       const scheduleData = await schedulingService.getScheduleData(projectId);
-      
+
       res.json(scheduleData);
     } catch (error) {
       console.error("Error getting schedule data:", error);
@@ -4719,17 +4729,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const projectId = parseInt(req.params.projectId);
-      
+
       if (!await checkProjectAccess(userId, projectId)) {
         return res.status(404).json({ message: "Project not found" });
       }
-      
+
       const { schedulingService } = await import('./scheduling');
       const scheduleData = await schedulingService.getScheduleData(projectId);
-      
+
       const criticalTasks = scheduleData.filter(t => t.isCriticalPath);
       const criticalPathLength = criticalTasks.reduce((sum, t) => sum + t.duration, 0);
-      
+
       res.json({
         tasks: criticalTasks,
         totalDuration: criticalPathLength
@@ -4741,9 +4751,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-  
+
   // Initialize WebSocket server
   wsManager.initialize(httpServer);
-  
+
   return httpServer;
 }

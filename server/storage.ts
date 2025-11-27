@@ -76,6 +76,12 @@ import type {
   InsertMessage,
   Message,
   UpdateMessage,
+  InsertContact,
+  Contact,
+  UpdateContact,
+  InsertContactLog,
+  ContactLog,
+  UpdateContactLog,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -335,6 +341,19 @@ export interface IStorage {
   createMessage(message: InsertMessage & { userId: string }): Promise<Message>;
   updateMessage(id: number, message: Partial<UpdateMessage>): Promise<Message | undefined>;
   deleteMessage(id: number): Promise<void>;
+
+  // Contacts (CRM)
+  getContact(id: number): Promise<Contact | undefined>;
+  getContactsByOrganization(organizationId: number): Promise<Contact[]>;
+  getContactByEmail(organizationId: number, email: string): Promise<Contact | undefined>;
+  createContact(contact: InsertContact): Promise<Contact>;
+  updateContact(id: number, contact: Partial<UpdateContact>): Promise<Contact | undefined>;
+  deleteContact(id: number): Promise<void>;
+
+  // Contact Logs
+  getContactLogs(contactId: number): Promise<ContactLog[]>;
+  createContactLog(log: InsertContactLog & { loggedBy?: string }): Promise<ContactLog>;
+  deleteContactLog(id: number): Promise<void>;
 
   // Inheritance helpers
   getTaskAncestors(taskId: number): Promise<Task[]>;
@@ -1944,6 +1963,60 @@ export class DatabaseStorage implements IStorage {
     await db.update(schema.chatMessages)
       .set({ deletedAt: new Date() })
       .where(eq(schema.chatMessages.id, id));
+  }
+
+  // Contacts (CRM)
+  async getContact(id: number): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(schema.contacts).where(eq(schema.contacts.id, id));
+    return contact;
+  }
+
+  async getContactsByOrganization(organizationId: number): Promise<Contact[]> {
+    return await db.select().from(schema.contacts)
+      .where(eq(schema.contacts.organizationId, organizationId))
+      .orderBy(asc(schema.contacts.lastName), asc(schema.contacts.firstName));
+  }
+
+  async getContactByEmail(organizationId: number, email: string): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(schema.contacts)
+      .where(and(
+        eq(schema.contacts.organizationId, organizationId),
+        eq(schema.contacts.email, email)
+      ));
+    return contact;
+  }
+
+  async createContact(contact: InsertContact): Promise<Contact> {
+    const [created] = await db.insert(schema.contacts).values(contact).returning();
+    return created;
+  }
+
+  async updateContact(id: number, contact: Partial<UpdateContact>): Promise<Contact | undefined> {
+    const [updated] = await db.update(schema.contacts)
+      .set({ ...contact, updatedAt: new Date() })
+      .where(eq(schema.contacts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteContact(id: number): Promise<void> {
+    await db.delete(schema.contacts).where(eq(schema.contacts.id, id));
+  }
+
+  // Contact Logs
+  async getContactLogs(contactId: number): Promise<ContactLog[]> {
+    return await db.select().from(schema.contactLogs)
+      .where(eq(schema.contactLogs.contactId, contactId))
+      .orderBy(desc(schema.contactLogs.date));
+  }
+
+  async createContactLog(log: InsertContactLog & { loggedBy?: string }): Promise<ContactLog> {
+    const [created] = await db.insert(schema.contactLogs).values(log).returning();
+    return created;
+  }
+
+  async deleteContactLog(id: number): Promise<void> {
+    await db.delete(schema.contactLogs).where(eq(schema.contactLogs.id, id));
   }
 
   // Inheritance helpers

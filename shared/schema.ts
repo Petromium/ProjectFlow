@@ -257,6 +257,7 @@ export const stakeholders = pgTable("stakeholders", {
   influence: integer("influence").notNull().default(3), // 1-5 scale
   interest: integer("interest").notNull().default(3), // 1-5 scale
   notes: text("notes"),
+  contactId: integer("contact_id").references(() => contacts.id), // Link to Master Directory
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -459,6 +460,7 @@ export const resources = pgTable("resources", {
   tags: text("tags").array(),
   profileImageUrl: varchar("profile_image_url", { length: 512 }),
 
+  contactId: integer("contact_id").references(() => contacts.id), // Link to Master Directory
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -800,6 +802,44 @@ export const chatMessages = pgTable("chat_messages", {
   userIdx: index("chat_messages_user_idx").on(table.userId),
   createdAtIdx: index("chat_messages_created_at_idx").on(table.createdAt),
   replyIdx: index("chat_messages_reply_idx").on(table.replyToMessageId),
+}));
+
+// ==================== Contact Management (CRM) ====================
+
+// Master Contact Directory (Organization Level)
+export const contacts = pgTable("contacts", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  company: text("company"),
+  jobTitle: text("job_title"),
+  type: text("type").default("other"), // client, vendor, consultant, partner, employee
+  linkedUserId: varchar("linked_user_id", { length: 255 }).references(() => users.id),
+  notes: text("notes"),
+  tags: text("tags").array(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  orgIdx: index("contacts_org_idx").on(table.organizationId),
+}));
+
+// Contact Interaction Logs
+export const contactLogs = pgTable("contact_logs", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  type: text("type").notNull(), // email, meeting, call, note
+  subject: text("subject"),
+  content: text("content"),
+  loggedBy: varchar("logged_by", { length: 255 }).references(() => users.id),
+  date: timestamp("date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  contactIdx: index("contact_logs_contact_idx").on(table.contactId),
+  projectIdx: index("contact_logs_project_idx").on(table.projectId),
 }));
 
 // Zod Schemas for Organizations
@@ -1315,3 +1355,19 @@ export const selectMessageSchema = createSelectSchema(chatMessages);
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type UpdateMessage = z.infer<typeof updateMessageSchema>;
 export type Message = typeof chatMessages.$inferSelect;
+
+// Zod Schemas for Contacts
+export const insertContactSchema = createInsertSchema(contacts).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateContactSchema = insertContactSchema.partial();
+export const selectContactSchema = createSelectSchema(contacts);
+export type InsertContact = z.infer<typeof insertContactSchema>;
+export type UpdateContact = z.infer<typeof updateContactSchema>;
+export type Contact = typeof contacts.$inferSelect;
+
+// Zod Schemas for Contact Logs
+export const insertContactLogSchema = createInsertSchema(contactLogs).omit({ id: true, createdAt: true, loggedBy: true });
+export const updateContactLogSchema = insertContactLogSchema.partial();
+export const selectContactLogSchema = createSelectSchema(contactLogs);
+export type InsertContactLog = z.infer<typeof insertContactLogSchema>;
+export type UpdateContactLog = z.infer<typeof updateContactLogSchema>;
+export type ContactLog = typeof contactLogs.$inferSelect;

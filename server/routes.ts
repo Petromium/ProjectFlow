@@ -28,7 +28,10 @@ import {
   insertConversationSchema,
   updateConversationSchema,
   insertMessageSchema,
-  updateMessageSchema
+  updateMessageSchema,
+  insertContactSchema,
+  updateContactSchema,
+  insertContactLogSchema
 } from "@shared/schema";
 import { chatWithAssistant, type ChatMessage } from "./aiAssistant";
 import { z } from "zod";
@@ -5615,6 +5618,387 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error getting unread count:", error);
       res.status(500).json({ message: error.message || "Failed to get unread count" });
+    }
+  });
+
+  // ===== CRM Contact Routes =====
+
+  // Get all contacts for an organization
+  app.get('/api/organizations/:orgId/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const contacts = await storage.getContactsByOrganization(orgId);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  // Create a new contact
+  app.post('/api/organizations/:orgId/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const contactData = insertContactSchema.parse({
+        ...req.body,
+        organizationId: orgId
+      });
+
+      const contact = await storage.createContact(contactData);
+      res.status(201).json(contact);
+    } catch (error: any) {
+      console.error("Error creating contact:", error);
+      res.status(400).json({ message: error.message || "Failed to create contact" });
+    }
+  });
+
+  // Update a contact
+  app.patch('/api/contacts/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const contactId = parseInt(req.params.id);
+      
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, contact.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updateData = updateContactSchema.parse(req.body);
+      const updated = await storage.updateContact(contactId, updateData);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating contact:", error);
+      res.status(400).json({ message: error.message || "Failed to update contact" });
+    }
+  });
+
+  // Delete a contact
+  app.delete('/api/contacts/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const contactId = parseInt(req.params.id);
+      
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, contact.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      await storage.deleteContact(contactId);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ message: "Failed to delete contact" });
+    }
+  });
+
+  // Get interaction history for a contact
+  app.get('/api/contacts/:id/logs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const contactId = parseInt(req.params.id);
+      
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, contact.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const logs = await storage.getContactLogs(contactId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching contact logs:", error);
+      res.status(500).json({ message: "Failed to fetch contact logs" });
+    }
+  });
+
+  // Log an interaction (manually or system)
+  app.post('/api/contacts/:id/logs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const contactId = parseInt(req.params.id);
+      
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, contact.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const logData = insertContactLogSchema.parse({
+        ...req.body,
+        contactId
+      });
+
+      const log = await storage.createContactLog({
+        ...logData,
+        loggedBy: userId
+      });
+      
+      res.status(201).json(log);
+    } catch (error: any) {
+      console.error("Error logging interaction:", error);
+      res.status(400).json({ message: error.message || "Failed to log interaction" });
+    }
+  });
+
+  // Sync/Promote Contacts from Projects (Migration Utility)
+  app.post('/api/organizations/:orgId/contacts/sync-from-projects', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const results = {
+        stakeholdersProcessed: 0,
+        resourcesProcessed: 0,
+        contactsCreated: 0,
+        contactsLinked: 0,
+        errors: [] as string[]
+      };
+
+      // 1. Get all projects for this org
+      const projects = await storage.getProjectsByOrganization(orgId);
+      
+      for (const project of projects) {
+        // 2. Process Stakeholders
+        const stakeholders = await storage.getStakeholdersByProject(project.id);
+        for (const sh of stakeholders) {
+          results.stakeholdersProcessed++;
+          // If already linked, skip
+          if (sh.contactId) continue;
+
+          // If no email, cannot reliably sync (or skip)
+          if (!sh.email) {
+            results.errors.push(`Stakeholder ${sh.name} (ID: ${sh.id}) skipped: No email`);
+            continue;
+          }
+
+          try {
+            // Check if contact exists
+            let contact = await storage.getContactByEmail(orgId, sh.email);
+            
+            if (!contact) {
+              // Create new contact
+              const nameParts = sh.name.split(' ');
+              const firstName = nameParts[0] || "Unknown";
+              const lastName = nameParts.slice(1).join(' ') || "-";
+              
+              contact = await storage.createContact({
+                organizationId: orgId,
+                firstName,
+                lastName,
+                email: sh.email,
+                phone: sh.phone,
+                company: sh.organization,
+                type: 'other', // Default
+                notes: `Imported from Stakeholder ID: ${sh.id} (Project: ${project.name})`
+              });
+              results.contactsCreated++;
+            }
+
+            // Link back to stakeholder
+            await storage.updateStakeholder(sh.id, { contactId: contact.id });
+            results.contactsLinked++;
+          } catch (err: any) {
+            results.errors.push(`Failed to sync stakeholder ${sh.name}: ${err.message}`);
+          }
+        }
+
+        // 3. Process Resources (Human only)
+        const resources = await storage.getResourcesByProject(project.id);
+        for (const res of resources) {
+          if (res.type !== 'human') continue;
+          
+          results.resourcesProcessed++;
+          if (res.contactId) continue;
+
+          // Use vendorContactEmail or construct a placeholder if missing?
+          // Resources table doesn't strictly require email, but vendorContactEmail exists.
+          // Let's check vendorContactEmail first.
+          const email = res.vendorContactEmail;
+          if (!email) {
+             // Cannot reliably deduplicate without email. Skip or create dupe?
+             // Better to skip to avoid mess.
+             continue;
+          }
+
+          try {
+            let contact = await storage.getContactByEmail(orgId, email);
+            
+            if (!contact) {
+              const nameParts = res.name.split(' ');
+              const firstName = nameParts[0] || "Unknown";
+              const lastName = nameParts.slice(1).join(' ') || "-";
+
+              contact = await storage.createContact({
+                organizationId: orgId,
+                firstName,
+                lastName,
+                email: email,
+                phone: res.vendorContactPhone,
+                company: res.vendorName,
+                type: 'vendor', // Likely a vendor/contractor
+                notes: `Imported from Resource ID: ${res.id} (Project: ${project.name})`
+              });
+              results.contactsCreated++;
+            }
+
+            await storage.updateResource(res.id, { contactId: contact.id });
+            results.contactsLinked++;
+          } catch (err: any) {
+            results.errors.push(`Failed to sync resource ${res.name}: ${err.message}`);
+          }
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error syncing contacts:", error);
+      res.status(500).json({ message: "Failed to sync contacts from projects" });
+    }
+  });
+
+  // Bulk Import Contacts (CSV)
+  app.post('/api/organizations/:orgId/contacts/import', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { contacts: importContacts } = req.body;
+      
+      if (!Array.isArray(importContacts)) {
+        return res.status(400).json({ message: "Invalid format: contacts must be an array" });
+      }
+
+      const results = {
+        created: 0,
+        updated: 0,
+        errors: [] as string[]
+      };
+
+      for (const c of importContacts) {
+        try {
+          // Basic duplication check by email
+          let existing;
+          if (c.email) {
+            existing = await storage.getContactByEmail(orgId, c.email);
+          }
+
+          if (existing) {
+            // Upsert behavior: update existing contact
+            await storage.updateContact(existing.id, {
+              firstName: c.firstName || existing.firstName,
+              lastName: c.lastName || existing.lastName,
+              phone: c.phone || existing.phone,
+              company: c.company || existing.company,
+              jobTitle: c.jobTitle || existing.jobTitle,
+              type: c.type || existing.type,
+              notes: c.notes || existing.notes
+            });
+            results.updated++;
+          } else {
+            // Create new contact
+            const newContact = insertContactSchema.parse({
+              ...c,
+              organizationId: orgId,
+              firstName: c.firstName || "Unknown",
+              lastName: c.lastName || "Unknown"
+            });
+            await storage.createContact(newContact);
+            results.created++;
+          }
+        } catch (err: any) {
+          results.errors.push(`Failed to import ${c.email || 'contact'}: ${err.message}`);
+        }
+      }
+
+      res.json(results);
+    } catch (error: any) {
+      console.error("Error importing contacts:", error);
+      res.status(500).json({ message: "Failed to import contacts" });
+    }
+  });
+
+  // Assign Contact to Project (Promote to Stakeholder/Resource)
+  app.post('/api/projects/:projectId/assign-contact', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+      const { contactId, role, type, rate, availability } = req.body;
+
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const contact = await storage.getContact(contactId);
+      if (!contact) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+
+      if (role === 'stakeholder') {
+        // Create Stakeholder linked to Contact
+        const stakeholder = await storage.createStakeholder({
+          projectId,
+          name: `${contact.firstName} ${contact.lastName}`,
+          email: contact.email,
+          phone: contact.phone,
+          organization: contact.company,
+          contactId: contact.id,
+          role: type || 'other'
+        });
+        res.json({ type: 'stakeholder', data: stakeholder });
+      } else if (role === 'resource') {
+        // Create Resource linked to Contact
+        const resource = await storage.createResource({
+          projectId,
+          name: `${contact.firstName} ${contact.lastName}`,
+          type: 'human',
+          contactId: contact.id,
+          availability: availability || 100,
+          rate: rate || 0,
+          vendorName: contact.company,
+          vendorContactEmail: contact.email,
+          vendorContactPhone: contact.phone
+        });
+        res.json({ type: 'resource', data: resource });
+      } else {
+        return res.status(400).json({ message: "Invalid assignment role" });
+      }
+    } catch (error: any) {
+      console.error("Error assigning contact:", error);
+      res.status(500).json({ message: "Failed to assign contact to project" });
     }
   });
 

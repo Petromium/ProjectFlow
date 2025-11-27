@@ -1302,6 +1302,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/bulk/tasks/recalculate', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taskIds } = req.body;
+
+      if (!Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ message: "No tasks selected" });
+      }
+
+      // Verify access to the first task's project
+      const firstTask = await storage.getTask(taskIds[0]);
+      if (!firstTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      if (!await checkProjectAccess(userId, firstTask.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Recalculate each task
+      for (const taskId of taskIds) {
+        await schedulingService.propagateDates(firstTask.projectId, taskId);
+      }
+
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(firstTask.projectId, "bulk-tasks-recalculated", { taskIds }, userId);
+
+      res.json({ success: true, count: taskIds.length });
+    } catch (error) {
+      console.error("Error bulk recalculating tasks:", error);
+      res.status(500).json({ message: "Failed to recalculate tasks" });
+    }
+  });
+
+  app.post('/api/bulk/tasks/baseline', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taskIds } = req.body;
+
+      if (!Array.isArray(taskIds) || taskIds.length === 0) {
+        return res.status(400).json({ message: "No tasks selected" });
+      }
+
+      // Verify access to the first task's project
+      const firstTask = await storage.getTask(taskIds[0]);
+      if (!firstTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      if (!await checkProjectAccess(userId, firstTask.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      let updatedCount = 0;
+
+      for (const taskId of taskIds) {
+        const task = await storage.getTask(taskId);
+        if (!task) continue;
+        
+        // Skip completed tasks or 100% progress
+        if (task.progress === 100 || task.status === 'completed') continue;
+
+        const baselineData: any = {
+          baselineStart: task.startDate,
+          baselineFinish: task.endDate,
+        };
+        
+        if (task.computedDuration) {
+          baselineData.baselineDuration = task.computedDuration;
+        }
+
+        await storage.updateTask(taskId, baselineData);
+        updatedCount++;
+      }
+
+      // Notify connected clients
+      wsManager.notifyProjectUpdate(firstTask.projectId, "bulk-tasks-baselined", { taskIds }, userId);
+
+      res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Error bulk baselining tasks:", error);
+      res.status(500).json({ message: "Failed to set baseline for tasks" });
+    }
+  });
+
   // ===== Stakeholder Routes =====
   app.get('/api/projects/:projectId/stakeholders', isAuthenticated, async (req: any, res) => {
     try {

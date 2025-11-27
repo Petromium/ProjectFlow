@@ -23,6 +23,9 @@ import {
 import type { Task, Risk, Issue, ResourceAssignment, Resource, Document, TaskDependency } from "@shared/schema";
 import { EditResourceModal } from "@/components/modals/EditResourceModal";
 import { ResourceLevelingModal } from "@/components/modals/ResourceLevelingModal";
+import { EditDocumentModal } from "@/components/modals/EditDocumentModal";
+import { EditRiskModal } from "@/components/modals/EditRiskModal";
+import { EditIssueModal } from "@/components/modals/EditIssueModal";
 
 type TaskStatus = "not-started" | "in-progress" | "review" | "completed" | "on-hold";
 type TaskPriority = "low" | "medium" | "high" | "critical";
@@ -111,6 +114,15 @@ export function TaskModal({
   const [newlyCreatedResourceId, setNewlyCreatedResourceId] = useState<number | null>(null);
   const [showPmiLegend, setShowPmiLegend] = useState(false);
   const [showResourceLeveling, setShowResourceLeveling] = useState(false);
+
+  const [showDocumentCreation, setShowDocumentCreation] = useState(false);
+  const [newlyCreatedDocumentId, setNewlyCreatedDocumentId] = useState<number | null>(null);
+  
+  const [showRiskCreation, setShowRiskCreation] = useState(false);
+  const [newlyCreatedRiskId, setNewlyCreatedRiskId] = useState<number | null>(null);
+  
+  const [showIssueCreation, setShowIssueCreation] = useState(false);
+  const [newlyCreatedIssueId, setNewlyCreatedIssueId] = useState<number | null>(null);
   
   const getDefaultFormData = (): TaskFormData => ({
     name: "",
@@ -269,7 +281,13 @@ export function TaskModal({
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("PATCH", `/api/tasks/${task?.id}`, data);
+      // Ensure decimal fields are sent as strings
+      const payload = {
+        ...data,
+        estimatedHours: data.estimatedHours ? String(data.estimatedHours) : null,
+        weightFactor: data.weightFactor !== undefined && data.weightFactor !== null ? String(data.weightFactor) : null,
+      };
+      const response = await apiRequest("PATCH", `/api/tasks/${task?.id}`, payload);
       return await response.json();
     },
     onSuccess: (updatedTask: Task) => {
@@ -571,6 +589,63 @@ export function TaskModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newlyCreatedResourceId, task]);
 
+  // Auto-link newly created document to task
+  useEffect(() => {
+    if (newlyCreatedDocumentId && task) {
+      addDocumentMutation.mutate(
+        { documentId: newlyCreatedDocumentId },
+        {
+          onSuccess: () => {
+            setNewlyCreatedDocumentId(null);
+            toast({
+              title: "Document Linked",
+              description: "The newly created document has been linked to this task.",
+            });
+          },
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newlyCreatedDocumentId, task]);
+
+  // Auto-link newly created risk to task
+  useEffect(() => {
+    if (newlyCreatedRiskId && task) {
+      addRiskMutation.mutate(
+        { riskId: newlyCreatedRiskId },
+        {
+          onSuccess: () => {
+            setNewlyCreatedRiskId(null);
+            toast({
+              title: "Risk Linked",
+              description: "The newly created risk has been linked to this task.",
+            });
+          },
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newlyCreatedRiskId, task]);
+
+  // Auto-link newly created issue to task
+  useEffect(() => {
+    if (newlyCreatedIssueId && task) {
+      addIssueMutation.mutate(
+        { issueId: newlyCreatedIssueId },
+        {
+          onSuccess: () => {
+            setNewlyCreatedIssueId(null);
+            toast({
+              title: "Issue Linked",
+              description: "The newly created issue has been linked to this task.",
+            });
+          },
+        }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newlyCreatedIssueId, task]);
+
   // If showing resource creation, render EditResourceModal instead
   if (showResourceCreation) {
     return (
@@ -595,29 +670,69 @@ export function TaskModal({
     );
   }
 
-  // Render Resource Leveling Modal if needed
-  if (showResourceLeveling && task) {
+  // If showing document creation
+  if (showDocumentCreation) {
     return (
-      <>
-        <ResourceLevelingModal
-          task={task}
-          open={showResourceLeveling}
-          onOpenChange={(isOpen) => {
-            setShowResourceLeveling(isOpen);
-            if (!isOpen) {
-              // Refresh task data after leveling
-              queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task.id}`] });
-            }
-          }}
-          onApply={(option) => {
-            // Refresh task data after applying leveling
-            queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task.id}`] });
-            queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/tasks`] });
-          }}
-        />
-        {/* Keep the main modal open but hidden */}
-        <div style={{ display: 'none' }} />
-      </>
+      <EditDocumentModal
+        document={null}
+        open={true}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setShowDocumentCreation(false);
+          }
+        }}
+        onSuccess={(createdDocument) => {
+          setShowDocumentCreation(false);
+          if (createdDocument?.id) {
+            setNewlyCreatedDocumentId(createdDocument.id);
+          }
+          queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/documents`] });
+        }}
+      />
+    );
+  }
+
+  // If showing risk creation
+  if (showRiskCreation) {
+    return (
+      <EditRiskModal
+        risk={null}
+        open={true}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setShowRiskCreation(false);
+          }
+        }}
+        onSuccess={(createdRisk) => {
+          setShowRiskCreation(false);
+          if (createdRisk?.id) {
+            setNewlyCreatedRiskId(createdRisk.id);
+          }
+          queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/risks`] });
+        }}
+      />
+    );
+  }
+
+  // If showing issue creation
+  if (showIssueCreation) {
+    return (
+      <EditIssueModal
+        issue={null}
+        open={true}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setShowIssueCreation(false);
+          }
+        }}
+        onSuccess={(createdIssue) => {
+          setShowIssueCreation(false);
+          if (createdIssue?.id) {
+            setNewlyCreatedIssueId(createdIssue.id);
+          }
+          queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/issues`] });
+        }}
+      />
     );
   }
 
@@ -1953,7 +2068,14 @@ export function TaskModal({
                 variant="outline" 
                 onClick={async () => {
                   try {
-                    const response = await apiRequest("POST", `/api/tasks/${task.id}/recalculate`);
+                    // Send current form data to update the task first, which triggers recalculation
+                    // This ensures the calculation is based on the values currently in the form
+                    // Note: Send decimals as strings to ensure compatibility with Zod schema for decimal columns
+                    const response = await apiRequest("PATCH", `/api/tasks/${task.id}`, {
+                      ...formData,
+                      estimatedHours: formData.estimatedHours ? String(formData.estimatedHours) : null,
+                      weightFactor: formData.weightFactor !== undefined && formData.weightFactor !== null ? String(formData.weightFactor) : null,
+                    });
                     
                     // Check if response is actually JSON
                     const contentType = response.headers.get("content-type");
@@ -1963,8 +2085,8 @@ export function TaskModal({
                       throw new Error(`Server returned ${response.status}: Expected JSON but got ${contentType}`);
                     }
                     
-                    const result = await response.json();
-                    const updatedTask = result.task || result;
+                    // The PATCH endpoint returns the updated task object directly
+                    const updatedTask = await response.json();
                     
                     // Update formData with refreshed task data, especially endDate and computedDuration
                     if (updatedTask) {
@@ -1972,20 +2094,21 @@ export function TaskModal({
                         ...prev,
                         endDate: updatedTask.endDate ? new Date(updatedTask.endDate).toISOString().split('T')[0] : prev.endDate,
                         startDate: updatedTask.startDate ? new Date(updatedTask.startDate).toISOString().split('T')[0] : prev.startDate,
+                        estimatedHours: updatedTask.estimatedHours ? String(updatedTask.estimatedHours) : prev.estimatedHours,
                       }));
                     }
                     
                     toast({
                       title: "Schedule Recalculated",
-                      description: result.message || "Task dates and dependent tasks have been recalculated.",
+                      description: "Task updated and schedule recalculated based on new values.",
                     });
+                    
                     queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/tasks`] });
-                    // Refresh the current task data
                     queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task.id}`] });
                   } catch (error: any) {
                     // Parse error message from the error string (format: "500: error message")
                     const errorMatch = error?.message?.match(/^\d+:\s*(.+)$/);
-                    const errorMessage = errorMatch?.[1] || error?.message || "Failed to recalculate schedule. Please ensure the server has been restarted.";
+                    const errorMessage = errorMatch?.[1] || error?.message || "Failed to recalculate schedule.";
                     console.error("Recalculate schedule error:", error);
                     toast({
                       title: "Error",

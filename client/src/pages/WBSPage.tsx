@@ -8,7 +8,7 @@ import {
   Search, Filter, LayoutGrid, List, Calendar as CalendarIcon, 
   GanttChartSquare, AlertCircle, Plus, Clock, AlertTriangle, 
   Loader2, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, X,
-  Link2, CheckCircle2, Percent, Users, FileText, AlertOctagon, Trash2, ChevronDown
+  Link2, CheckCircle2, Percent, Users, FileText, AlertOctagon, Trash2, ChevronDown, Activity
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -84,6 +84,7 @@ export default function WBSPage() {
   const [dateRangeStart, setDateRangeStart] = useState<string>("");
   const [dateRangeEnd, setDateRangeEnd] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [baselineDialogOpen, setBaselineDialogOpen] = useState(false);
   const [selectedResources, setSelectedResources] = useState<number[]>([]);
   const [selectedRisks, setSelectedRisks] = useState<number[]>([]);
   const [selectedIssues, setSelectedIssues] = useState<number[]>([]);
@@ -243,6 +244,39 @@ export default function WBSPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message || "Failed to link issues", variant: "destructive" });
+    },
+  });
+
+  const bulkRecalculateMutation = useMutation({
+    mutationFn: async (taskIds: number[]) => {
+      const res = await apiRequest("POST", `/api/bulk/tasks/recalculate`, { taskIds });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/tasks`] });
+      setSelectedTasks([]);
+      toast({ title: "Success", description: `Schedule recalculated for ${data.count} tasks` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to recalculate schedule", variant: "destructive" });
+    },
+  });
+
+  const bulkBaselineMutation = useMutation({
+    mutationFn: async (taskIds: number[]) => {
+      const res = await apiRequest("POST", `/api/bulk/tasks/baseline`, { taskIds });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/tasks`] });
+      setSelectedTasks([]);
+      toast({ 
+        title: "Success", 
+        description: `Baseline set for ${data.count} tasks` 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to set baseline", variant: "destructive" });
     },
   });
 
@@ -1130,6 +1164,30 @@ export default function WBSPage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Recalculate Button */}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={selectedTasks.length === 0}
+          onClick={() => bulkRecalculateMutation.mutate(selectedTasks)}
+          data-testid="button-recalculate-schedule"
+        >
+          <Activity className="h-4 w-4 mr-1" />
+          Recalculate Schedule
+        </Button>
+
+        {/* Set Baseline Button */}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={selectedTasks.length === 0}
+          onClick={() => setBaselineDialogOpen(true)}
+          data-testid="button-set-baseline"
+        >
+          <Clock className="h-4 w-4 mr-1" />
+          Set Baseline
+        </Button>
+
         {/* Delete Button */}
         <Button 
           variant="outline" 
@@ -1173,6 +1231,32 @@ export default function WBSPage() {
               data-testid="button-confirm-delete"
             >
               {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Baseline Confirmation Dialog */}
+      <AlertDialog open={baselineDialogOpen} onOpenChange={setBaselineDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Set Baseline for {selectedTasks.length} tasks?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will set the baseline dates to match current planned dates for the selected tasks.
+              <br /><br />
+              <strong>Note:</strong> Completed tasks (100% progress) will be ignored. To include them, change their progress to less than 100%.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-baseline">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                bulkBaselineMutation.mutate(selectedTasks);
+                setBaselineDialogOpen(false);
+              }}
+              data-testid="button-confirm-baseline"
+            >
+              {bulkBaselineMutation.isPending ? "Setting Baseline..." : "Proceed"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,0 +1,775 @@
+{
+  "version": "1.0",
+  "project": {
+    "name": "TexStar Onshore Drilling - Pad A (Permian)",
+    "code": "TEX-2025-DRL-042",
+    "description": "Site preparation, rig mobilization, and drilling operations for Well A-12 in the Permian Basin, Texas.",
+    "status": "active",
+    "startDate": "2025-03-01T08:00:00.000Z",
+    "endDate": "2025-09-30T17:00:00.000Z",
+    "budget": "18500000.00",
+    "currency": "USD"
+  },
+  "tasks": [
+    {
+      "wbsCode": "1",
+      "name": "Project Management & Permitting",
+      "description": "Overarching management and regulatory compliance",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 40,
+      "startDate": "2025-03-01T08:00:00.000Z",
+      "endDate": "2025-09-30T17:00:00.000Z",
+      "assignedTo": "PM-TX-01",
+      "estimatedHours": "1200.00",
+      "actualHours": "400.00",
+      "discipline": "management"
+    },
+    {
+      "wbsCode": "1.1",
+      "name": "Regulatory Approvals",
+      "description": "RRC and Environmental permits",
+      "status": "completed",
+      "priority": "critical",
+      "progress": 100,
+      "assignedTo": "REG-OFF-02",
+      "discipline": "legal"
+    },
+    {
+      "wbsCode": "2",
+      "name": "Civil Works & Site Prep",
+      "description": "Preparation of the drilling pad and access",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 65,
+      "assignedTo": "CONST-SUP-01",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "2.1",
+      "name": "Access Roads",
+      "description": "Construction of heavy haul roads",
+      "status": "completed",
+      "priority": "medium",
+      "progress": 100,
+      "assignedTo": "CONST-SUP-01",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "2.2",
+      "name": "Pad Construction",
+      "description": "Main rig pad construction",
+      "status": "in-progress",
+      "priority": "critical",
+      "progress": 70,
+      "assignedTo": "CIV-ENG-03",
+      "discipline": "civil"
+    },
+    {
+      "wbsCode": "2.2.1",
+      "name": "Foundation Works",
+      "description": "Cellar and conductor installation",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 50,
+      "assignedTo": "CIV-ENG-03",
+      "discipline": "structural"
+    },
+    {
+      "wbsCode": "2.2.1.1",
+      "name": "Conductor Pipe Install",
+      "description": "Driving the conductor pipe",
+      "status": "in-progress",
+      "priority": "high",
+      "progress": 40,
+      "assignedTo": "DRL-LEAD-04",
+      "discipline": "mechanical"
+    },
+    {
+      "wbsCode": "2.2.1.1.1",
+      "name": "Conductor Cementing",
+      "description": "Cementing the conductor in place (Level 5)",
+      "status": "not-started",
+      "priority": "critical",
+      "progress": 0,
+      "assignedTo": "CEM-SPEC-05",
+      "discipline": "cementing"
+    },
+    {
+      "wbsCode": "3",
+      "name": "Rig Mobilization",
+      "description": "Transport and Rig-up",
+      "status": "not-started",
+      "priority": "high",
+      "progress": 0,
+      "assignedTo": "LOG-MGR-06",
+      "discipline": "logistics"
+    },
+    {
+      "wbsCode": "4",
+      "name": "Drilling Operations",
+      "description": "Spud to TD",
+      "status": "not-started",
+      "priority": "critical",
+      "progress": 0,
+      "assignedTo": "DRL-SUP-07",
+      "discipline": "drilling"
+    }
+  ],
+  "risks": [
+    {
+      "code": "RSK-001",
+      "title": "Loss of Circulation",
+      "description": "Uncontrolled loss of drilling fluid into formation",
+      "category": "technical",
+      "probability": 4,
+      "impact": "critical",
+      "status": "identified",
+      "mitigationPlan": "Have LCM (Lost Circulation Material) pills ready on site."
+    },
+    {
+      "code": "RSK-002",
+      "title": "H2S Release",
+      "description": "Encountering sour gas pockets",
+      "category": "hse",
+      "probability": 2,
+      "impact": "critical",
+      "status": "mitigating",
+      "mitigationPlan": "Install H2S detectors and mandate breathing apparatus training."
+    },
+    {
+      "code": "RSK-003",
+      "title": "Rig Mechanical Failure",
+      "description": "Top drive or drawworks failure delaying spud",
+      "category": "equipment",
+      "probability": 3,
+      "impact": "high",
+      "status": "assessed",
+      "mitigationPlan": "Pre-mob inspection and critical spares inventory."
+    },
+    {
+      "code": "RSK-004",
+      "title": "Severe Weather (Tornado/Storm)",
+      "description": "Texas seasonal storms halting crane lifts",
+      "category": "environmental",
+      "probability": 3,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Weather monitoring protocols and shelter-in-place drills."
+    },
+    {
+      "code": "RSK-005",
+      "title": "Cement Bond Failure",
+      "description": "Poor isolation between casing and formation",
+      "category": "quality",
+      "probability": 2,
+      "impact": "critical",
+      "status": "identified",
+      "mitigationPlan": "Use centralizers and circulate mud efficiently before cementing."
+    },
+    {
+      "code": "RSK-006",
+      "title": "Supply Chain - Casing Delay",
+      "description": "Steel tariff issues delaying casing delivery",
+      "category": "procurement",
+      "probability": 4,
+      "impact": "high",
+      "status": "mitigating",
+      "mitigationPlan": "Order long-lead items 3 months early; identify backup vendor."
+    },
+    {
+      "code": "RSK-007",
+      "title": "Water Supply Shortage",
+      "description": "Lack of frac water due to drought",
+      "category": "resources",
+      "probability": 3,
+      "impact": "high",
+      "status": "assessed",
+      "mitigationPlan": "Secure water rights early and construct temporary containment."
+    },
+    {
+      "code": "RSK-008",
+      "title": "Stuck Pipe",
+      "description": "Drill string sticking due to differential pressure",
+      "category": "technical",
+      "probability": 3,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Maintain proper mud weight and keep pipe moving."
+    },
+    {
+      "code": "RSK-009",
+      "title": "Kick / Blowout",
+      "description": "Influx of formation fluid exceeding mud weight",
+      "category": "technical",
+      "probability": 1,
+      "impact": "critical",
+      "status": "mitigating",
+      "mitigationPlan": "Regular BOP testing and kick drills for crew."
+    },
+    {
+      "code": "RSK-010",
+      "title": "Landowner Disputes",
+      "description": "Access road blockage by local landowner",
+      "category": "legal",
+      "probability": 2,
+      "impact": "medium",
+      "status": "closed",
+      "mitigationPlan": "Signed agreement and upfront compensation."
+    },
+    {
+      "code": "RSK-011",
+      "title": "Mud Pump Failure",
+      "description": "Primary pumps going offline",
+      "category": "equipment",
+      "probability": 3,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Contract requires 3 pumps on site (N+1 redundancy)."
+    },
+    {
+      "code": "RSK-012",
+      "title": "Regulatory Change",
+      "description": "New RRC flaring regulations",
+      "category": "regulatory",
+      "probability": 2,
+      "impact": "medium",
+      "status": "assessed",
+      "mitigationPlan": "Plan for gas capture pipeline immediately."
+    },
+    {
+      "code": "RSK-013",
+      "title": "Personnel Injury (Hand/Finger)",
+      "description": "Crush injuries on rig floor",
+      "category": "hse",
+      "probability": 3,
+      "impact": "high",
+      "status": "mitigating",
+      "mitigationPlan": "Automated pipe handling and 'Red Zone' enforcement."
+    },
+    {
+      "code": "RSK-014",
+      "title": "Fuel Price Volatility",
+      "description": "Diesel costs exceeding budget",
+      "category": "cost",
+      "probability": 4,
+      "impact": "low",
+      "status": "identified",
+      "mitigationPlan": "Fuel hedging strategy."
+    },
+    {
+      "code": "RSK-015",
+      "title": "Shale Instability",
+      "description": "Sloughing shale causing hole cleaning issues",
+      "category": "technical",
+      "probability": 4,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Optimize Inhibitive mud system."
+    },
+    {
+      "code": "RSK-016",
+      "title": "Directional Tool Failure",
+      "description": "MWD/LWD failure requiring trip out of hole",
+      "category": "equipment",
+      "probability": 3,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Backup tools required on site."
+    },
+    {
+      "code": "RSK-017",
+      "title": "Protester Activity",
+      "description": "Environmental activists blocking gate",
+      "category": "security",
+      "probability": 1,
+      "impact": "medium",
+      "status": "assessed",
+      "mitigationPlan": "Site security liaison with local Sheriff."
+    },
+    {
+      "code": "RSK-018",
+      "title": "Soil Contamination",
+      "description": "Oil based mud spill",
+      "category": "environmental",
+      "probability": 2,
+      "impact": "high",
+      "status": "mitigating",
+      "mitigationPlan": "Zero-discharge loop and double-lined pits."
+    },
+    {
+      "code": "RSK-019",
+      "title": "Road Degradation",
+      "description": "Heavy haulers destroying county roads",
+      "category": "logistics",
+      "probability": 5,
+      "impact": "medium",
+      "status": "mitigating",
+      "mitigationPlan": "Road bond posted and maintenance crew on standby."
+    },
+    {
+      "code": "RSK-020",
+      "title": "Crane Wind-out",
+      "description": "High winds stopping casing run",
+      "category": "weather",
+      "probability": 3,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Schedule casing runs during low-wind windows."
+    },
+    {
+      "code": "RSK-021",
+      "title": "Generator Synchronization Issue",
+      "description": "Power plant failure",
+      "category": "equipment",
+      "probability": 2,
+      "impact": "critical",
+      "status": "identified",
+      "mitigationPlan": "Regular maintenance and load testing."
+    },
+    {
+      "code": "RSK-022",
+      "title": "Drill Bit Grading Poor",
+      "description": "Bit wearing out faster than planned",
+      "category": "technical",
+      "probability": 3,
+      "impact": "medium",
+      "status": "assessed",
+      "mitigationPlan": "Adjust ROP/WOB parameters."
+    },
+    {
+      "code": "RSK-023",
+      "title": "Fishing Operations",
+      "description": "Twist off leaving junk in hole",
+      "category": "technical",
+      "probability": 2,
+      "impact": "critical",
+      "status": "identified",
+      "mitigationPlan": "Fishing jars included in BHA."
+    },
+    {
+      "code": "RSK-024",
+      "title": "Sand Logistics",
+      "description": "Proppant shortage during completion",
+      "category": "procurement",
+      "probability": 3,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Use sand silos for onsite storage."
+    },
+    {
+      "code": "RSK-025",
+      "title": "Data Transmission Loss",
+      "description": "Satellite link down, no real-time data",
+      "category": "it",
+      "probability": 2,
+      "impact": "low",
+      "status": "identified",
+      "mitigationPlan": "Cellular backup booster."
+    },
+    {
+      "code": "RSK-026",
+      "title": "Snake/Wildlife Hazard",
+      "description": "Rattlesnakes on location",
+      "category": "hse",
+      "probability": 4,
+      "impact": "low",
+      "status": "mitigating",
+      "mitigationPlan": "Wildlife fencing and toolbox talks."
+    },
+    {
+      "code": "RSK-027",
+      "title": "Key Personnel Turnoever",
+      "description": "Company Man quits mid-project",
+      "category": "management",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Cross-training and retention bonuses."
+    },
+    {
+      "code": "RSK-028",
+      "title": "Cement Plug Failure",
+      "description": "Plug doesn't set for sidetrack",
+      "category": "technical",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Wait on cement time increase."
+    },
+    {
+      "code": "RSK-029",
+      "title": "Corrosion in Tubulars",
+      "description": "CO2 causing pitting",
+      "category": "quality",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Use Chrome-13 tubing."
+    },
+    {
+      "code": "RSK-030",
+      "title": "Electrical Ground Fault",
+      "description": "Lightning strike or bad grounding",
+      "category": "equipment",
+      "probability": 2,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Lightning protection system inspection."
+    },
+    {
+      "code": "RSK-031",
+      "title": "Waste Disposal Delay",
+      "description": "Cuttings haul-off trucks unavailable",
+      "category": "logistics",
+      "probability": 3,
+      "impact": "medium",
+      "status": "assessed",
+      "mitigationPlan": "Contract multiple hauling vendors."
+    },
+    {
+      "code": "RSK-032",
+      "title": "Subcontractor Insolvency",
+      "description": "Civil contractor goes bankrupt",
+      "category": "commercial",
+      "probability": 1,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Financial health checks during vetting."
+    },
+    {
+      "code": "RSK-033",
+      "title": "Overpressure Zone",
+      "description": "Unexpected high pressure formation",
+      "category": "technical",
+      "probability": 2,
+      "impact": "critical",
+      "status": "mitigating",
+      "mitigationPlan": "Review seismic data and offset well logs."
+    },
+    {
+      "code": "RSK-034",
+      "title": "BHA Vibration",
+      "description": "Stick-slip damaging tools",
+      "category": "technical",
+      "probability": 4,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Use shock subs and vibration monitoring."
+    },
+    {
+      "code": "RSK-035",
+      "title": "Camp Hygiene Issue",
+      "description": "Food poisoning in man-camp",
+      "category": "hse",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Audit catering vendor."
+    },
+    {
+      "code": "RSK-036",
+      "title": "Permit Expiry",
+      "description": "Drilling taking longer than permit window",
+      "category": "regulatory",
+      "probability": 2,
+      "impact": "high",
+      "status": "assessed",
+      "mitigationPlan": "Track dates in PMIS."
+    },
+    {
+      "code": "RSK-037",
+      "title": "Noise Complaint",
+      "description": "Nearby residents complaining about night ops",
+      "category": "community",
+      "probability": 3,
+      "impact": "low",
+      "status": "mitigating",
+      "mitigationPlan": "Sound barriers on rig engines."
+    },
+    {
+      "code": "RSK-038",
+      "title": "Heat Stress",
+      "description": "Summer temps >105F affecting crew",
+      "category": "hse",
+      "probability": 5,
+      "impact": "medium",
+      "status": "mitigating",
+      "mitigationPlan": "Mandatory water breaks and cooling stations."
+    },
+    {
+      "code": "RSK-039",
+      "title": "Theft of Material",
+      "description": "Copper or tool theft at night",
+      "category": "security",
+      "probability": 2,
+      "impact": "low",
+      "status": "identified",
+      "mitigationPlan": "Cameras and night watchman."
+    },
+    {
+      "code": "RSK-040",
+      "title": "Invoice Dispute",
+      "description": "Rig contractor overcharging hours",
+      "category": "cost",
+      "probability": 3,
+      "impact": "low",
+      "status": "identified",
+      "mitigationPlan": "Daily cost tracking signature."
+    },
+    {
+      "code": "RSK-041",
+      "title": "Dogleg Severity",
+      "description": "Hole tortuosity too high for casing",
+      "category": "technical",
+      "probability": 3,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Reaming runs prior to casing."
+    },
+    {
+      "code": "RSK-042",
+      "title": "Wireline Misrun",
+      "description": "Logging tools failing in hole",
+      "category": "technical",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Check cable tension and tool heads."
+    },
+    {
+      "code": "RSK-043",
+      "title": "Chemical Spill",
+      "description": "Acid or solvent leak",
+      "category": "hse",
+      "probability": 2,
+      "impact": "medium",
+      "status": "identified",
+      "mitigationPlan": "Spill kits at every chemical storage point."
+    },
+    {
+      "code": "RSK-044",
+      "title": "Drone Interference",
+      "description": "Unauthorized drone flying over rig",
+      "category": "security",
+      "probability": 1,
+      "impact": "low",
+      "status": "identified",
+      "mitigationPlan": "No fly zone signage."
+    },
+    {
+      "code": "RSK-045",
+      "title": "Incorrect Pipe Tally",
+      "description": "Wrong depth calculation",
+      "category": "technical",
+      "probability": 2,
+      "impact": "critical",
+      "status": "identified",
+      "mitigationPlan": "Strap pipe twice before running."
+    },
+    {
+      "code": "RSK-046",
+      "title": "Communication Breakdown",
+      "description": "Day/Night shift handover errors",
+      "category": "management",
+      "probability": 4,
+      "impact": "medium",
+      "status": "mitigating",
+      "mitigationPlan": "Standardized handover checklists."
+    },
+    {
+      "code": "RSK-047",
+      "title": "Archaeological Find",
+      "description": "Arrowheads found during excavation",
+      "category": "regulatory",
+      "probability": 1,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Pre-survey clearance."
+    },
+    {
+      "code": "RSK-048",
+      "title": "Dust Control",
+      "description": "Silica dust exceeding OSHA limits",
+      "category": "hse",
+      "probability": 3,
+      "impact": "medium",
+      "status": "mitigating",
+      "mitigationPlan": "Watering roads and vacuum systems."
+    },
+    {
+      "code": "RSK-049",
+      "title": "Vehicle Accident",
+      "description": "Crew truck crash on lease road",
+      "category": "hse",
+      "probability": 3,
+      "impact": "high",
+      "status": "mitigating",
+      "mitigationPlan": "Speed limit enforcement and GPS monitoring."
+    },
+    {
+      "code": "RSK-050",
+      "title": "Pandemic Outbreak",
+      "description": "Flu sweeping through rig crew",
+      "category": "health",
+      "probability": 2,
+      "impact": "high",
+      "status": "identified",
+      "mitigationPlan": "Isolation protocols and hygiene standards."
+    }
+  ],
+  "issues": [
+    {
+      "code": "ISS-001",
+      "title": "Excavator Hydraulic Leak",
+      "description": "Primary CAT 336 leaking fluid on Pad A corner.",
+      "priority": "medium",
+      "status": "in-progress",
+      "assignedTo": "CONST-SUP-01",
+      "reportedBy": "Site-Foreman",
+      "resolution": null
+    },
+    {
+      "code": "ISS-002",
+      "title": "Incorrect Rebar Size Delivered",
+      "description": "Cellar rebar delivered was #4 instead of #6.",
+      "priority": "high",
+      "status": "open",
+      "assignedTo": "PROC-MGR-08",
+      "reportedBy": "QC-Insp",
+      "resolution": null
+    },
+    {
+      "code": "ISS-003",
+      "title": "Gate Keypad Failure",
+      "description": "Night crew locked out of site for 2 hours.",
+      "priority": "low",
+      "status": "resolved",
+      "assignedTo": "SEC-OFF-09",
+      "reportedBy": "Driller-Night",
+      "resolution": "Battery replaced in keypad."
+    },
+    {
+      "code": "ISS-004",
+      "title": "Missing Calibration Certs",
+      "description": "H2S monitors missing current cal stickers.",
+      "priority": "critical",
+      "status": "open",
+      "assignedTo": "HSE-LEAD-10",
+      "reportedBy": "Safety-Audit",
+      "resolution": null
+    },
+    {
+      "code": "ISS-005",
+      "title": "Wifi Down in Trailer",
+      "description": "Company man trailer has no internet.",
+      "priority": "medium",
+      "status": "in-progress",
+      "assignedTo": "IT-SUP-11",
+      "reportedBy": "PM-TX-01",
+      "resolution": null
+    },
+    {
+      "code": "ISS-006",
+      "title": "Mud Tank Valve Stuck",
+      "description": "Tank 3 discharge valve seized.",
+      "priority": "high",
+      "status": "open",
+      "assignedTo": "MECH-LEAD-12",
+      "reportedBy": "Derrickhand",
+      "resolution": null
+    },
+    {
+      "code": "ISS-007",
+      "title": "Heavy Rain Washout",
+      "description": "Access road mile 2 washed out by flash flood.",
+      "priority": "critical",
+      "status": "in-progress",
+      "assignedTo": "CONST-SUP-01",
+      "reportedBy": "Truck-Driver",
+      "resolution": null
+    },
+    {
+      "code": "ISS-008",
+      "title": "Noise Complaint - Rancher",
+      "description": "Mr. Smith complained about braking noise at 2 AM.",
+      "priority": "medium",
+      "status": "open",
+      "assignedTo": "PM-TX-01",
+      "reportedBy": "Security",
+      "resolution": null
+    },
+    {
+      "code": "ISS-009",
+      "title": "PPE Violation",
+      "description": "Contractor spotted without hard hat.",
+      "priority": "medium",
+      "status": "closed",
+      "assignedTo": "HSE-LEAD-10",
+      "reportedBy": "PM-TX-01",
+      "resolution": "Written warning issued and retraining completed."
+    },
+    {
+      "code": "ISS-010",
+      "title": "Diesel Theft Suspected",
+      "description": "100 gallons unaccounted for in daily log.",
+      "priority": "high",
+      "status": "open",
+      "assignedTo": "SEC-OFF-09",
+      "reportedBy": "Logistics",
+      "resolution": null
+    }
+  ],
+  "stakeholders": [
+    {
+      "name": "TexStar Operations VP",
+      "role": "sponsor",
+      "organization": "TexStar Energy",
+      "email": "vp.ops@texstar.com",
+      "phone": "+1-214-555-0199",
+      "influence": 5,
+      "interest": 5
+    },
+    {
+      "name": "Nabors Drilling",
+      "role": "contractor",
+      "organization": "Nabors",
+      "email": "ops.tx@nabors.com",
+      "phone": "+1-432-555-0200",
+      "influence": 4,
+      "interest": 5
+    },
+    {
+      "name": "Texas RRC",
+      "role": "regulatory",
+      "organization": "Railroad Commission",
+      "email": "info@rrc.texas.gov",
+      "phone": "+1-512-555-0300",
+      "influence": 5,
+      "interest": 3
+    }
+  ],
+  "costItems": [
+    {
+      "description": "Rig Day Rate (mob)",
+      "category": "construction",
+      "budgeted": "150000.00",
+      "actual": "150000.00",
+      "currency": "USD"
+    },
+    {
+      "description": "Civil Site Prep",
+      "category": "subcontractor",
+      "budgeted": "450000.00",
+      "actual": "475000.00",
+      "currency": "USD"
+    },
+    {
+      "description": "Casing String - Surface",
+      "category": "materials",
+      "budgeted": "120000.00",
+      "actual": "0.00",
+      "currency": "USD"
+    }
+  ]
+}

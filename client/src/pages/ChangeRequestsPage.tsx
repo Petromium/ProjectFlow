@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { TableRowCard } from "@/components/TableRowCard";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,18 @@ export default function ChangeRequestsPage() {
   const [formData, setFormData] = useState<ChangeRequestFormData>(initialFormData);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("list");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new") {
+      setTimeout(() => {
+        setFormData(initialFormData);
+        setEditingCr(null);
+        setDialogOpen(true);
+      }, 100);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   // Fetch analytics
   const { data: analytics, isLoading: analyticsLoading } = useQuery({

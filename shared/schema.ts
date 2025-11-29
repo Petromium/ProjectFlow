@@ -1075,7 +1075,10 @@ export type InsertUserOrganization = z.infer<typeof insertUserOrganizationSchema
 export type UserOrganization = typeof userOrganizations.$inferSelect;
 
 // Zod Schemas for Projects
-export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProjectSchema = createInsertSchema(projects, {
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
 export const updateProjectSchema = insertProjectSchema.partial();
 export const selectProjectSchema = createSelectSchema(projects);
 export type InsertProject = z.infer<typeof insertProjectSchema>;

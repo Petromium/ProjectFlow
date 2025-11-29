@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { TableRowCard } from "@/components/TableRowCard";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,18 @@ export default function WBSPage() {
   const [lastClickedTaskId, setLastClickedTaskId] = useState<number | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<number[]>([]);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new") {
+      // Slight delay to ensure data is ready or just open it
+      setTimeout(() => setTaskModalOpen(true), 100);
+      // Clean up URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
+
   const [editingTask, setEditingTask] = useState<Task | undefined>();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [defaultStatus, setDefaultStatus] = useState<TaskStatus>("not-started");

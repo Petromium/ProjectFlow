@@ -441,28 +441,28 @@ export function TopBar() {
           <DropdownMenuSeparator />
           <DropdownMenuItem 
             data-testid="menu-item-new-task"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/tasks?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/wbs?action=new`)}
             disabled={!selectedProjectId}
           >
             New Task
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-risk"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/risks?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/risks?action=new`)}
             disabled={!selectedProjectId}
           >
             New Risk
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-issue"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/issues?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/issues?action=new`)}
             disabled={!selectedProjectId}
           >
             New Issue
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-change"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/change-requests?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/change-requests?action=new`)}
             disabled={!selectedProjectId}
           >
             Change Request
@@ -489,28 +489,28 @@ export function TopBar() {
           <DropdownMenuSeparator />
           <DropdownMenuItem 
             data-testid="menu-item-new-task"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/tasks?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/wbs?action=new`)}
             disabled={!selectedProjectId}
           >
             New Task
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-risk"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/risks?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/risks?action=new`)}
             disabled={!selectedProjectId}
           >
             New Risk
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-issue"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/issues?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/issues?action=new`)}
             disabled={!selectedProjectId}
           >
             New Issue
           </DropdownMenuItem>
           <DropdownMenuItem 
             data-testid="menu-item-new-change"
-            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/change-requests?action=new`)}
+            onClick={() => selectedProjectId && navigate(`/change-requests?action=new`)}
             disabled={!selectedProjectId}
           >
             Change Request

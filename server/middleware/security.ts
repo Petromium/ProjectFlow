@@ -15,11 +15,11 @@ export function configureHelmet() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for Tailwind
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"], // Allow inline styles for Tailwind
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images
         connectSrc: ["'self'", "ws:", "wss:", "*"], // Allow WebSocket connections and external APIs
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
@@ -93,6 +93,11 @@ export function configureCORS() {
     const allowedOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
       : ["http://localhost:5000", "http://localhost:3000"]; // Default for development
+
+    // Also allow undefined origin (for curl, Postman, etc.) if in dev
+    if (process.env.NODE_ENV === "development") {
+        allowedOrigins.push("undefined");
+    }
 
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { TableRowCard } from "@/components/TableRowCard";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,18 @@ export default function IssuesPage() {
   const [selectedIssues, setSelectedIssues] = useState<number[]>([]);
   const [formData, setFormData] = useState<IssueFormData>(initialFormData);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new") {
+      setTimeout(() => {
+        setFormData(initialFormData);
+        setEditingIssue(null);
+        setDialogOpen(true);
+      }, 100);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const { 
     data: issues = [], 

@@ -205,7 +205,7 @@ const defaultTemplates: Record<string, { subject: string; body: string }> = {
           <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #d69e2e;">
             <h3 style="color: #d69e2e; margin-top: 0;">{{cr_code}} - {{cr_title}}</h3>
             <p><strong>Requested By:</strong> {{requested_by}}</p>
-            <p><strong>Cost Impact:</strong> ${{cost_impact}}</p>
+            <p><strong>Cost Impact:</strong> \${{cost_impact}}</p>
             <p><strong>Schedule Impact:</strong> {{schedule_impact}} days</p>
             <p><strong>Description:</strong></p>
             <p style="color: #4a5568;">{{description}}</p>

@@ -1,0 +1,45 @@
+ID,WBS Code,Name,Status,Progress,Start Date,End Date,Assigned To,Priority
+38,1,"Project Initiation & Planning",completed,100,2024-01-15,2024-03-31,"",critical
+43,1.1,"Feasibility Study",completed,100,2024-01-15,2024-02-15,"",critical
+63,1.1.1,"Solar Resource Analysis",completed,71,2024-01-15,2024-04-06,"",high
+64,1.1.2,"Financial Modeling",completed,100,2024-04-06,2024-02-15,"",high
+65,1.1.3,"Site Selection Report",completed,100,2024-02-05,2024-02-15,"",medium
+44,1.2,"Environmental Impact Assessment",completed,100,2024-02-01,2024-03-15,"",high
+45,1.3,"Land Acquisition & Permits",completed,100,2024-02-15,2024-03-31,"",critical
+39,2,"Engineering & Design",in-progress,50,2024-03-01,2026-06-19,"",critical
+75,2.1,"Micro-siting & Optimization",completed,100,2025-01-15,2025-02-28,"",critical
+46,2.1,"Preliminary Design",in-progress,50,2026-06-19,2026-12-04,"",high
+47,2.2,"Detailed Engineering",review,50,2026-12-04,2028-01-28,"",critical
+66,2.2.1,"Electrical Single Line Diagram",in-progress,50,2028-01-28,2028-03-24,"",critical
+67,2.2.2,"Cable Schedule & Routing",in-progress,50,2028-03-24,2028-06-02,"",high
+68,2.2.3,"Civil & Structural Drawings",in-progress,50,2028-06-02,2028-09-15,"",high
+69,2.2.4,"SCADA & Monitoring Design",in-progress,50,2028-09-15,2028-11-03,"",medium
+48,2.3,"Grid Connection Design",in-progress,50,2028-11-03,2029-06-01,"",high
+40,3,"Procurement",completed,100,2029-06-01,2024-08-31,"",high
+49,3.1,"Solar Panels Procurement",completed,100,2024-04-01,2024-06-30,"",critical
+50,3.2,"Inverter Systems",completed,100,2024-05-01,2024-07-31,"",high
+51,3.3,"Mounting Structures",completed,100,2024-05-15,2024-08-15,"",high
+52,3.4,"Electrical Equipment",completed,100,2024-06-01,2024-08-31,"",high
+41,4,"Construction",in-progress,65,2024-06-01,2025-06-30,"",critical
+53,4.1,"Site Preparation",completed,100,2024-06-01,2024-08-31,"",critical
+76,4.1,"Civil Infrastructure",in-progress,60,2025-05-01,2026-01-30,"",high
+78,4.1.1,"Access Roads & Hardstands",completed,100,2025-05-01,2025-09-30,"",critical
+79,4.1.2,"WTG Foundations",in-progress,55,2025-07-01,2026-01-30,"",critical
+80,4.1.2.1,"Sector North Foundations (WTG 01-10)",completed,100,2025-07-01,2025-10-30,"",high
+81,4.1.2.2,"Sector Central Foundations (WTG 11-20)",in-progress,65,2025-09-15,2026-01-15,"",critical
+54,4.2,"Civil Works",completed,100,2024-08-01,2024-11-30,"",high
+77,4.2,"Turbine Erection",not-started,0,2026-01-15,2026-06-30,"",critical
+55,4.3,"Mounting Structure Installation",in-progress,85,2024-10-01,2030-05-05,"",critical
+56,4.4,"Panel Installation",in-progress,55,2030-05-05,2037-03-27,"",critical
+70,4.4.1,"Zone A Panel Installation",completed,100,2037-03-27,2025-01-31,"",critical
+71,4.4.2,"Zone B Panel Installation",in-progress,60,2025-01-15,2026-10-31,"",critical
+73,4.4.2.1,"Zone B East Installation",completed,100,2026-10-31,2025-02-15,"",high
+74,4.4.2.2,"Zone B West Installation",in-progress,20,2025-02-15,2026-04-10,"",critical
+72,4.4.3,"Zone C Panel Installation",not-started,0,2026-10-31,2029-02-16,"",high
+57,4.5,"Electrical Installation",in-progress,40,2037-03-27,2041-09-15,"",high
+58,4.6,"Substation Construction",review,25,2041-09-15,2045-06-06,"",critical
+42,5,"Commissioning & Handover",not-started,0,2045-06-06,2046-12-18,"",high
+59,5.1,"System Testing",not-started,0,2046-12-18,2047-05-30,"",critical
+60,5.2,"Grid Synchronization",not-started,0,2047-05-30,2047-10-17,"",critical
+61,5.3,"Performance Testing",not-started,0,2047-10-17,2048-01-30,"",high
+62,5.4,"Training & Handover",not-started,0,2048-01-30,2048-05-14,"",medium

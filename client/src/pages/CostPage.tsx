@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Plus, Pencil, Trash2, FolderKanban } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Plus, Pencil, Trash2, FolderKanban, Search } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -167,6 +167,8 @@ export default function CostPage() {
     taskId: undefined,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: costItems = [], isLoading } = useQuery<CostItem[]>({
     queryKey: ['/api/projects', projectId, 'costs'],
@@ -368,9 +370,15 @@ export default function CostPage() {
   const categoryBreakdown = aggregateCostsByCategory(costItems);
   const earnedValue = calculateEarnedValue(costItems, tasks);
 
+  const filteredCostItems = costItems.filter(item => 
+    item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.referenceNumber && item.referenceNumber.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="p-6 space-y-6 h-full flex flex-col">
+      <div className="flex items-center justify-between gap-4 flex-wrap shrink-0">
         <div>
           <h1 className="text-3xl font-semibold" data-testid="text-cost-title">Cost Management</h1>
           <p className="text-muted-foreground">Budget tracking and cost analytics</p>
@@ -382,13 +390,13 @@ export default function CostPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 shrink-0">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 shrink-0">
           <MetricCard
             title="Total Budget"
             value={formatShortCurrency(totalBudget)}
@@ -424,180 +432,176 @@ export default function CostPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cost Breakdown by Category</CardTitle>
-          <CardDescription>Budgeted vs actual costs per category</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-            </div>
-          ) : categoryBreakdown.length > 0 ? (
-            categoryBreakdown.map((cat) => {
-              const budgetUsed = cat.budgeted > 0 ? (cat.actual / cat.budgeted) * 100 : 0;
-              const catVariancePercent = cat.budgeted > 0 ? (cat.variance / cat.budgeted) * 100 : 0;
-
-              return (
-                <div key={cat.category} className="space-y-3">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div>
-                      <h3 className="font-semibold capitalize">{cat.category}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Budget: {formatCurrency(cat.budgeted, projectCurrency)} ({cat.itemCount} items)
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold">
-                        {formatCurrency(cat.actual, projectCurrency)}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
+        <div className="lg:col-span-3 flex flex-col gap-4 min-h-0">
+          <Card className="flex-1 flex flex-col min-h-0">
+            <CardHeader className="shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Cost Items</CardTitle>
+                  <CardDescription>All cost line items for this project</CardDescription>
+                </div>
+                <div className="relative w-64">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search costs..." 
+                    className="pl-8" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-auto">
+              {isLoading ? (
+                <Skeleton className="h-full" />
+              ) : filteredCostItems.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredCostItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 p-3 rounded-lg border bg-card hover-elevate"
+                      data-testid={`cost-item-${item.id}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm truncate">{item.description}</span>
+                          <Badge variant="outline" className="text-xs capitalize">{item.category}</Badge>
+                        </div>
+                        <div className="flex gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
+                          <span>Budget: {formatCurrency(parseNumeric(item.budgeted), item.currency)}</span>
+                          <span>Actual: {formatCurrency(parseNumeric(item.actual), item.currency)}</span>
+                          {parseNumeric(item.committed || '0') > 0 && (
+                            <span>Committed: {formatCurrency(parseNumeric(item.committed || '0'), item.currency)}</span>
+                          )}
+                          {item.status && (
+                            <Badge variant="outline" className="text-xs">{item.status}</Badge>
+                          )}
+                        </div>
                       </div>
-                      <Badge
-                        variant={cat.variance > 0 ? "destructive" : "default"}
-                        className="mt-1"
-                      >
-                        {cat.variance > 0 ? "+" : ""}
-                        {catVariancePercent.toFixed(1)}%
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDialog(item)}
+                          data-testid={`button-edit-cost-${item.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteMutation.mutate(item.id)}
+                          data-testid={`button-delete-cost-${item.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No cost items found.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Breakdown by Category</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-24" />
+                  <Skeleton className="h-24" />
+                </div>
+              ) : categoryBreakdown.length > 0 ? (
+                categoryBreakdown.map((cat) => {
+                  const budgetUsed = cat.budgeted > 0 ? (cat.actual / cat.budgeted) * 100 : 0;
+                  const catVariancePercent = cat.budgeted > 0 ? (cat.variance / cat.budgeted) * 100 : 0;
+
+                  return (
+                    <div key={cat.category} className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div>
+                          <h3 className="font-semibold capitalize text-sm">{cat.category}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(cat.actual, projectCurrency)} / {formatCurrency(cat.budgeted, projectCurrency)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge
+                            variant={cat.variance > 0 ? "destructive" : "default"}
+                            className="text-xs px-1.5 py-0"
+                          >
+                            {cat.variance > 0 ? "+" : ""}
+                            {catVariancePercent.toFixed(0)}%
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Progress 
+                          value={Math.min(budgetUsed, 100)} 
+                          className={`h-1.5 ${budgetUsed > 100 ? 'bg-destructive/20' : ''}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  No data available.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Earned Value Analysis</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Planned Value (PV)</span>
+                    <span className="font-semibold font-mono text-sm">{formatCurrency(earnedValue.pv, projectCurrency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Earned Value (EV)</span>
+                    <span className="font-semibold font-mono text-sm">{formatCurrency(earnedValue.ev, projectCurrency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Actual Cost (AC)</span>
+                    <span className="font-semibold font-mono text-sm">{formatCurrency(earnedValue.ac, projectCurrency)}</span>
+                  </div>
+                  <div className="pt-4 border-t space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">CPI</span>
+                      <Badge variant={earnedValue.cpi >= 1 ? "default" : "destructive"}>
+                        {earnedValue.cpi.toFixed(2)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">SPI</span>
+                      <Badge variant={earnedValue.spi >= 1 ? "default" : "secondary"}>
+                        {earnedValue.spi.toFixed(2)}
                       </Badge>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Budget Utilization</span>
-                      <span className="font-medium">{budgetUsed.toFixed(1)}%</span>
-                    </div>
-                    <Progress 
-                      value={Math.min(budgetUsed, 100)} 
-                      className={`h-2 ${budgetUsed > 100 ? 'bg-destructive/20' : ''}`}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No cost items added yet. Click "Add Cost Item" to get started.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Earned Value Analysis</CardTitle>
-            <CardDescription>Project performance metrics based on schedule and cost</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <Skeleton className="h-48" />
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Planned Value (PV)</span>
-                  <span className="font-semibold font-mono">{formatCurrency(earnedValue.pv, projectCurrency)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Earned Value (EV)</span>
-                  <span className="font-semibold font-mono">{formatCurrency(earnedValue.ev, projectCurrency)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Actual Cost (AC)</span>
-                  <span className="font-semibold font-mono">{formatCurrency(earnedValue.ac, projectCurrency)}</span>
-                </div>
-                <div className="pt-4 border-t space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Cost Performance Index (CPI)</span>
-                    <Badge variant={earnedValue.cpi >= 1 ? "default" : "destructive"}>
-                      {earnedValue.cpi.toFixed(2)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Schedule Performance Index (SPI)</span>
-                    <Badge variant={earnedValue.spi >= 1 ? "default" : "secondary"}>
-                      {earnedValue.spi.toFixed(2)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Cost Variance (CV)</span>
-                    <span className={`font-mono text-sm ${earnedValue.cv >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {earnedValue.cv >= 0 ? '+' : ''}{formatCurrency(earnedValue.cv, projectCurrency)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Schedule Variance (SV)</span>
-                    <span className={`font-mono text-sm ${earnedValue.sv >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {earnedValue.sv >= 0 ? '+' : ''}{formatCurrency(earnedValue.sv, projectCurrency)}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cost Items</CardTitle>
-            <CardDescription>All cost line items for this project</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-48" />
-            ) : costItems.length > 0 ? (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {costItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-2 p-3 rounded-lg border bg-card hover-elevate"
-                    data-testid={`cost-item-${item.id}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm truncate">{item.description}</span>
-                        <Badge variant="outline" className="text-xs capitalize">{item.category}</Badge>
-                      </div>
-                      <div className="flex gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
-                        <span>Budget: {formatCurrency(parseNumeric(item.budgeted), item.currency)}</span>
-                        <span>Actual: {formatCurrency(parseNumeric(item.actual), item.currency)}</span>
-                        {parseNumeric(item.committed || '0') > 0 && (
-                          <span>Committed: {formatCurrency(parseNumeric(item.committed || '0'), item.currency)}</span>
-                        )}
-                        {item.status && (
-                          <Badge variant="outline" className="text-xs">{item.status}</Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDialog(item)}
-                        data-testid={`button-edit-cost-${item.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteMutation.mutate(item.id)}
-                        data-testid={`button-delete-cost-${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No cost items yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

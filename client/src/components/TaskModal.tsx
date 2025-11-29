@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, AlertTriangle, AlertCircle, User, Calendar, FileText, 
   ArrowRight, ArrowLeft, Clock, Activity, Plus, X, Link2, GitBranch,
-  Pencil, Check, Info, ChevronDown, ChevronUp
+  Pencil, Check, Info, ChevronDown, ChevronUp, Building2
 } from "lucide-react";
 import type { Task, Risk, Issue, ResourceAssignment, Resource, Document, TaskDependency } from "@shared/schema";
 import { EditResourceModal } from "@/components/modals/EditResourceModal";
@@ -616,7 +616,7 @@ export function TaskModal({
   useEffect(() => {
     if (newlyCreatedRiskId && task) {
       addRiskMutation.mutate(
-        { riskId: newlyCreatedRiskId },
+        newlyCreatedRiskId,
         {
           onSuccess: () => {
             setNewlyCreatedRiskId(null);
@@ -635,7 +635,7 @@ export function TaskModal({
   useEffect(() => {
     if (newlyCreatedIssueId && task) {
       addIssueMutation.mutate(
-        { issueId: newlyCreatedIssueId },
+        newlyCreatedIssueId,
         {
           onSuccess: () => {
             setNewlyCreatedIssueId(null);
@@ -771,10 +771,10 @@ export function TaskModal({
       if (!open) handleClose();
       else onOpenChange(open);
     }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="modal-task">
-        <DialogHeader className="shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-6xl h-[90vh] flex flex-col p-0 gap-0" data-testid="modal-task">
+        <DialogHeader className="p-6 pb-4 shrink-0 border-b">
+          <div className="flex items-center justify-between mr-8">
+            <DialogTitle className="flex items-center gap-2 text-xl">
               {isEditing ? (
                 <>
                   <Badge variant="outline" className="font-mono">
@@ -799,33 +799,65 @@ export function TaskModal({
           </div>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-7 shrink-0">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="dependencies" disabled={!isEditing}>
-              Dependencies {isEditing && (predecessors.length + successors.length > 0) && `(${predecessors.length + successors.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="resources" disabled={!isEditing}>
-              Resources {isEditing && assignments.length > 0 && `(${assignments.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="documents" disabled={!isEditing}>
-              Documents {isEditing && taskDocuments.length > 0 && `(${taskDocuments.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="risks" disabled={!isEditing}>
-              Risks {isEditing && taskRisks.length > 0 && `(${taskRisks.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="issues" disabled={!isEditing}>
-              Issues {isEditing && taskIssues.length > 0 && `(${taskIssues.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="chat">Chat</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-2 border-b shrink-0 bg-background">
+            <TabsList className="w-full justify-start h-auto p-0 bg-transparent border-b-0 rounded-none">
+              <TabsTrigger 
+                value="details" 
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Details
+              </TabsTrigger>
+              <TabsTrigger 
+                value="dependencies" 
+                disabled={!isEditing}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Dependencies {isEditing && (predecessors.length + successors.length > 0) && `(${predecessors.length + successors.length})`}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="resources" 
+                disabled={!isEditing}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Resources {isEditing && assignments.length > 0 && `(${assignments.length})`}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="documents" 
+                disabled={!isEditing}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Documents {isEditing && taskDocuments.length > 0 && `(${taskDocuments.length})`}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="risks" 
+                disabled={!isEditing}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Risks {isEditing && taskRisks.length > 0 && `(${taskRisks.length})`}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="issues" 
+                disabled={!isEditing}
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Issues {isEditing && taskIssues.length > 0 && `(${taskIssues.length})`}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="chat"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                Chat
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <ScrollArea className="flex-1 mt-4">
-            <div className="pr-4 pb-4">
-              <TabsContent value="details" className="space-y-6 mt-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex-1 overflow-y-auto p-6">
+            <TabsContent value="details" className="space-y-6 mt-0 h-full">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column: Description & Core Info */}
+                <div className="lg:col-span-2 space-y-6">
                   <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-muted-foreground">Basic Information</h3>
                     <div className="space-y-2">
                       <Label htmlFor="task-name">Task Name *</Label>
                       <Input
@@ -834,6 +866,7 @@ export function TaskModal({
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         data-testid="input-task-name"
+                        className="text-lg font-medium"
                       />
                     </div>
 
@@ -842,14 +875,125 @@ export function TaskModal({
                       <Textarea
                         id="task-description"
                         placeholder="Enter task description"
-                        rows={3}
+                        rows={5}
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         data-testid="textarea-task-description"
                       />
                     </div>
+                  </div>
 
+                  {/* EPC Details Section */}
+                  <div className="border rounded-lg p-4 bg-muted/10 space-y-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      EPC Details
+                    </h3>
                     <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="discipline">Discipline</Label>
+                        <Select 
+                          value={formData.discipline} 
+                          onValueChange={(value) => setFormData({ ...formData, discipline: value })}
+                        >
+                          <SelectTrigger id="discipline" data-testid="select-discipline">
+                            <SelectValue placeholder="Select discipline" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DISCIPLINES.map((disc) => (
+                              <SelectItem key={disc.value} value={disc.value}>{disc.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="area-code">Area Code</Label>
+                        <Input
+                          id="area-code"
+                          placeholder="e.g., A-100"
+                          value={formData.areaCode}
+                          onChange={(e) => setFormData({ ...formData, areaCode: e.target.value })}
+                          data-testid="input-area-code"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="contractor">Responsible Contractor</Label>
+                        <Input
+                          id="contractor"
+                          placeholder="Enter contractor name"
+                          value={formData.responsibleContractor}
+                          onChange={(e) => setFormData({ ...formData, responsibleContractor: e.target.value })}
+                          data-testid="input-contractor"
+                        />
+                      </div>
+
+                      {assignments.length > 1 && (
+                        <div className="space-y-2">
+                          <Label htmlFor="work-mode">Work Mode</Label>
+                          <Select 
+                            value={formData.workMode} 
+                            onValueChange={(value: "parallel" | "sequential") => setFormData({ ...formData, workMode: value })}
+                          >
+                            <SelectTrigger id="work-mode" data-testid="select-work-mode">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="parallel">Parallel (Max Duration)</SelectItem>
+                              <SelectItem value="sequential">Sequential (Sum Duration)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PMI Standard Duration Info */}
+                  {task && (
+                    <div className="space-y-3 p-4 bg-accent/5 border border-accent/20 rounded-lg">
+                      <h4 className="text-sm font-semibold flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Duration Information (PMI Standard)
+                      </h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Baseline Duration</Label>
+                          <p className="text-sm font-medium">
+                            {(task as any).baselineDuration 
+                              ? `${(task as any).baselineDuration} days` 
+                              : "Not set"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Computed Duration</Label>
+                          <p className="text-sm font-medium">
+                            {(task as any).computedDuration 
+                              ? `${(task as any).computedDuration} days` 
+                              : task.estimatedHours 
+                                ? "Calculating..." 
+                                : "Not calculated"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Actual Duration</Label>
+                          <p className="text-sm font-medium">
+                            {(task as any).actualDuration 
+                              ? `${(task as any).actualDuration} days` 
+                              : task.status === "completed" && (task as any).actualStartDate && (task as any).actualFinishDate
+                                ? `${Math.ceil((new Date((task as any).actualFinishDate).getTime() - new Date((task as any).actualStartDate).getTime()) / (1000 * 60 * 60 * 24))} days`
+                                : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Meta, Status, Dates */}
+                <div className="lg:col-span-1 space-y-6">
+                  <Card>
+                    <CardContent className="p-4 space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="task-status">Status</Label>
                         <Select 
@@ -858,12 +1002,10 @@ export function TaskModal({
                             const today = new Date().toISOString().split('T')[0];
                             const updates: Partial<TaskFormData> = { status: value };
                             
-                            // Auto-set actualStartDate when status changes to in-progress
                             if (value === 'in-progress' && !formData.actualStartDate) {
                               updates.actualStartDate = today;
                             }
                             
-                            // Auto-set actualFinishDate when status changes to completed
                             if (value === 'completed' && !formData.actualFinishDate) {
                               updates.actualFinishDate = today;
                               updates.progress = 100;
@@ -902,369 +1044,157 @@ export function TaskModal({
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="task-progress">Progress: {formData.progress}%</Label>
-                      <Input
-                        id="task-progress"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={formData.progress}
-                        onChange={(e) => {
-                          const newProgress = parseInt(e.target.value);
-                          setFormData({ ...formData, progress: newProgress });
-                          
-                          // Auto-set actual dates based on progress/status
-                          const today = new Date().toISOString().split('T')[0];
-                          if (newProgress > 0 && newProgress < 100 && !formData.actualStartDate) {
-                            setFormData(prev => ({ ...prev, actualStartDate: today }));
-                          }
-                          if (newProgress === 100 && !formData.actualFinishDate) {
-                            setFormData(prev => ({ ...prev, actualFinishDate: today }));
-                          }
-                        }}
-                        className="cursor-pointer"
-                        data-testid="slider-task-progress"
-                      />
-                      {formData.progress === 100 && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">
-                          Task completed - schedule calculations are disabled. Use actual dates for historical tracking.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="estimated-hours">Estimated Hours (Effort) *</Label>
+                        <Label htmlFor="task-progress" className="flex justify-between">
+                          <span>Progress</span>
+                          <span>{formData.progress}%</span>
+                        </Label>
                         <Input
-                          id="estimated-hours"
-                          type="number"
-                          step="0.01"
+                          id="task-progress"
+                          type="range"
                           min="0"
-                          placeholder="e.g., 100"
-                          value={formData.estimatedHours}
-                          onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
-                          data-testid="input-estimated-hours"
+                          max="100"
+                          value={formData.progress}
+                          onChange={(e) => {
+                            const newProgress = parseInt(e.target.value);
+                            setFormData({ ...formData, progress: newProgress });
+                            const today = new Date().toISOString().split('T')[0];
+                            if (newProgress > 0 && newProgress < 100 && !formData.actualStartDate) {
+                              setFormData(prev => ({ ...prev, actualStartDate: today }));
+                            }
+                            if (newProgress === 100 && !formData.actualFinishDate) {
+                              setFormData(prev => ({ ...prev, actualFinishDate: today }));
+                            }
+                          }}
+                          className="cursor-pointer"
+                          data-testid="slider-task-progress"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Base effort hours for duration calculation
-                        </p>
                       </div>
+                    </CardContent>
+                  </Card>
 
-                      {assignments.length > 1 && (
-                        <div className="space-y-2">
-                          <Label htmlFor="work-mode">Work Mode</Label>
-                          <Select 
-                            value={formData.workMode} 
-                            onValueChange={(value: "parallel" | "sequential") => setFormData({ ...formData, workMode: value })}
-                          >
-                            <SelectTrigger id="work-mode" data-testid="select-work-mode">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="parallel">Parallel (Max Duration)</SelectItem>
-                              <SelectItem value="sequential">Sequential (Sum Duration)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            {formData.workMode === "parallel" 
-                              ? "Resources work together, task finishes when slowest completes"
-                              : "Resources work sequentially, durations are added"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimated-hours">Estimated Hours</Label>
+                    <Input
+                      id="estimated-hours"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.estimatedHours}
+                      onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
+                      data-testid="input-estimated-hours"
+                    />
+                  </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="constraint-type">Constraint Type</Label>
+                    <Select 
+                      value={formData.constraintType} 
+                      onValueChange={(value) => setFormData({ ...formData, constraintType: value })}
+                    >
+                      <SelectTrigger id="constraint-type" data-testid="select-constraint-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONSTRAINT_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                    {task && (
-                      <div className="space-y-3 p-4 bg-accent/5 border border-accent/20 rounded-lg">
-                        <h4 className="text-sm font-semibold">Duration Information (PMI Standard)</h4>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Baseline Duration</Label>
-                            <p className="text-sm font-medium">
-                              {(task as any).baselineDuration 
-                                ? `${(task as any).baselineDuration} days` 
-                                : "Not set"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">Original planned duration</p>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Computed Duration</Label>
-                            <p className="text-sm font-medium">
-                              {(task as any).computedDuration 
-                                ? `${(task as any).computedDuration} days` 
-                                : task.estimatedHours 
-                                  ? "Calculating..." 
-                                  : "Not calculated"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Effort ÷ (Resource Capacity × Allocation)
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Actual Duration</Label>
-                            <p className="text-sm font-medium">
-                              {(task as any).actualDuration 
-                                ? `${(task as any).actualDuration} days` 
-                                : task.status === "completed" && (task as any).actualStartDate && (task as any).actualFinishDate
-                                  ? `${Math.ceil((new Date((task as any).actualFinishDate).getTime() - new Date((task as any).actualStartDate).getTime()) / (1000 * 60 * 60 * 24))} days`
-                                  : "N/A"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">Real duration from actual start to actual finish</p>
-                          </div>
-                        </div>
-                        {task.estimatedHours && assignments.length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-muted-foreground">
-                              <strong>Calculation:</strong> {Number(task.estimatedHours)} hours ÷ 
-                              {assignments.map((a, idx) => {
-                                const resource = resources.find(r => r.id === a.resourceId);
-                                const maxHoursPerDay = resource?.maxHoursPerDay || 8;
-                                const allocation = a.allocation || 100;
-                                const effectiveHours = (maxHoursPerDay * allocation) / 100;
-                                return ` ${effectiveHours}hr/day (${resource?.name || 'Resource'})`;
-                              }).join(formData.workMode === "parallel" ? " (max)" : " + ")}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Planned Dates Section */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold">Planned Dates</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="start-date">Planned Start Date</Label>
+                  {/* Dates Section */}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase">Planned</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="start-date" className="text-xs">Start</Label>
                           <Input
                             id="start-date"
                             type="date"
                             value={formData.startDate}
                             onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                            data-testid="input-start-date"
                             disabled={formData.progress === 100}
+                            className="h-8 text-xs"
                           />
-                          <p className="text-xs text-muted-foreground">
-                            {formData.progress === 100 
-                              ? "Task completed - use actual dates"
-                              : "Setting this will recalculate dependent tasks"}
-                          </p>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="end-date">Planned End Date</Label>
+                        <div className="space-y-1">
+                          <Label htmlFor="end-date" className="text-xs">End</Label>
                           <Input
                             id="end-date"
                             type="date"
                             value={formData.endDate}
                             onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                            data-testid="input-end-date"
                             disabled={formData.progress === 100}
+                            className="h-8 text-xs"
                           />
-                          <p className="text-xs text-muted-foreground">
-                            {formData.progress === 100 
-                              ? "Task completed - use actual dates"
-                              : "Calculated from start date + computed duration"}
-                          </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Baseline Dates Section */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold">Baseline Dates</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="baseline-start">Baseline Start</Label>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase">Baseline</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="baseline-start" className="text-xs">Start</Label>
                           <Input
                             id="baseline-start"
                             type="date"
                             value={formData.baselineStart}
                             onChange={(e) => setFormData({ ...formData, baselineStart: e.target.value })}
-                            data-testid="input-baseline-start"
                             disabled={!!(task as any)?.baselineStart}
+                            className="h-8 text-xs"
                           />
-                          <p className="text-xs text-muted-foreground">
-                            {(task as any)?.baselineStart 
-                              ? "Baseline locked - snapshot for comparison"
-                              : "Original planned start (snapshot)"}
-                          </p>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="baseline-finish">Baseline Finish</Label>
+                        <div className="space-y-1">
+                          <Label htmlFor="baseline-finish" className="text-xs">Finish</Label>
                           <Input
                             id="baseline-finish"
                             type="date"
                             value={formData.baselineFinish}
                             onChange={(e) => setFormData({ ...formData, baselineFinish: e.target.value })}
-                            data-testid="input-baseline-finish"
                             disabled={!!(task as any)?.baselineFinish}
+                            className="h-8 text-xs"
                           />
-                          <p className="text-xs text-muted-foreground">
-                            {(task as any)?.baselineFinish 
-                              ? "Baseline locked - snapshot for comparison"
-                              : "Original planned finish (snapshot)"}
-                          </p>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Actual Dates Section */}
-                    {(formData.progress > 0 || task) && (
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-semibold">Actual Dates</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="actual-start-date">Actual Start Date</Label>
-                            <Input
-                              id="actual-start-date"
-                              type="date"
-                              value={formData.actualStartDate}
-                              onChange={(e) => setFormData({ ...formData, actualStartDate: e.target.value })}
-                              data-testid="input-actual-start-date"
-                              disabled={formData.progress === 0}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              When work actually started
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="actual-finish-date">Actual Finish Date</Label>
-                            <Input
-                              id="actual-finish-date"
-                              type="date"
-                              value={formData.actualFinishDate}
-                              onChange={(e) => setFormData({ ...formData, actualFinishDate: e.target.value })}
-                              data-testid="input-actual-finish-date"
-                              disabled={formData.progress < 100}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              When work actually finished
-                            </p>
-                          </div>
-                        </div>
-                        {task && formData.actualStartDate && formData.actualFinishDate && (
-                          <div className="p-2 bg-accent/5 border border-accent/20 rounded text-xs space-y-1">
-                            {formData.baselineStart && (
-                              <p className="text-muted-foreground">
-                                <strong>Variance vs Baseline:</strong> {
-                                  Math.ceil((new Date(formData.actualFinishDate).getTime() - new Date(formData.baselineFinish || formData.baselineStart).getTime()) / (1000 * 60 * 60 * 24))
-                                } days {new Date(formData.actualFinishDate) > new Date(formData.baselineFinish || formData.baselineStart) ? 'behind' : 'ahead'}
-                              </p>
-                            )}
-                            {formData.startDate && (
-                              <p className="text-muted-foreground">
-                                <strong>Variance vs Planned:</strong> {
-                                  Math.ceil((new Date(formData.actualFinishDate).getTime() - new Date(formData.endDate || formData.startDate).getTime()) / (1000 * 60 * 60 * 24))
-                                } days {new Date(formData.actualFinishDate) > new Date(formData.endDate || formData.startDate) ? 'behind' : 'ahead'}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-muted-foreground">EPC Details</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="discipline">Discipline</Label>
-                        <Select 
-                          value={formData.discipline} 
-                          onValueChange={(value) => setFormData({ ...formData, discipline: value })}
-                        >
-                          <SelectTrigger id="discipline" data-testid="select-discipline">
-                            <SelectValue placeholder="Select discipline" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DISCIPLINES.map((disc) => (
-                              <SelectItem key={disc.value} value={disc.value}>{disc.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="area-code">Area Code</Label>
-                        <Input
-                          id="area-code"
-                          placeholder="e.g., A-100"
-                          value={formData.areaCode}
-                          onChange={(e) => setFormData({ ...formData, areaCode: e.target.value })}
-                          data-testid="input-area-code"
-                        />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="contractor">Responsible Contractor</Label>
-                      <Input
-                        id="contractor"
-                        placeholder="Enter contractor name"
-                        value={formData.responsibleContractor}
-                        onChange={(e) => setFormData({ ...formData, responsibleContractor: e.target.value })}
-                        data-testid="input-contractor"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="constraint-type">Constraint Type</Label>
-                        <div className="space-y-2">
-                          <Select 
-                            value={formData.constraintType} 
-                            onValueChange={(value) => setFormData({ ...formData, constraintType: value })}
-                          >
-                            <SelectTrigger id="constraint-type" data-testid="select-constraint">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CONSTRAINT_TYPES.map((ct) => (
-                                <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {formData.constraintType !== "asap" && formData.constraintType !== "alap" && task && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowResourceLeveling(true)}
-                              className="w-full"
-                            >
-                              <AlertTriangle className="h-4 w-4 mr-2" />
-                              Check Resource Leveling
-                            </Button>
-                          )}
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase">Actual</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="actual-start-date" className="text-xs">Start</Label>
+                          <Input
+                            id="actual-start-date"
+                            type="date"
+                            value={formData.actualStartDate}
+                            onChange={(e) => setFormData({ ...formData, actualStartDate: e.target.value })}
+                            disabled={formData.progress === 0}
+                            className="h-8 text-xs"
+                          />
                         </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="weight-factor">Weight Factor</Label>
-                        <Input
-                          id="weight-factor"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={formData.weightFactor}
-                          onChange={(e) => setFormData({ ...formData, weightFactor: parseFloat(e.target.value) || 0 })}
-                          data-testid="input-weight-factor"
-                        />
+                        <div className="space-y-1">
+                          <Label htmlFor="actual-finish-date" className="text-xs">Finish</Label>
+                          <Input
+                            id="actual-finish-date"
+                            type="date"
+                            value={formData.actualFinishDate}
+                            onChange={(e) => setFormData({ ...formData, actualFinishDate: e.target.value })}
+                            disabled={formData.progress < 100}
+                            className="h-8 text-xs"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </TabsContent>
+              </div>
+            </TabsContent>
 
-              <TabsContent value="dependencies" className="space-y-4 mt-0">
+            <TabsContent value="dependencies" className="space-y-4 mt-0">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 p-4 bg-accent/5 border border-accent/20 rounded-lg">
                     <GitBranch className="h-5 w-5 text-muted-foreground" />
@@ -2012,10 +1942,13 @@ export function TaskModal({
               </TabsContent>
 
               <TabsContent value="chat" className="space-y-4 mt-0 h-full">
-                {task && <TaskChatTab taskId={task.id} />}
+                {task ? <TaskChatTab taskId={task.id} /> : (
+                  <div className="flex items-center justify-center h-64">
+                    <p className="text-sm text-muted-foreground">Please save the task first to enable chat.</p>
+                  </div>
+                )}
               </TabsContent>
             </div>
-          </ScrollArea>
         </Tabs>
 
         <DialogFooter className="gap-2 shrink-0 border-t pt-4">

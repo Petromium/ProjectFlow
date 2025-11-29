@@ -1,0 +1,207 @@
+{
+  "version": "1.0",
+  "project": {
+    "name": "Your Project Name",
+    "code": "PROJECT-2025-001",
+    "description": "Brief project description",
+    "status": "active",
+    "startDate": "2025-11-28T23:28:18.088Z",
+    "endDate": "2026-11-28T23:28:18.088Z",
+    "budget": "10000000.00",
+    "currency": "USD"
+  },
+  "tasks": [
+    {
+      "wbsCode": "1",
+      "name": "Phase 1 - Planning",
+      "description": "Initial planning phase",
+      "status": "not-started",
+      "priority": "high",
+      "progress": 0,
+      "startDate": "2025-11-28T23:28:18.088Z",
+      "endDate": "2025-12-28T23:28:18.088Z",
+      "assignedTo": "PM-01",
+      "estimatedHours": "200.00",
+      "actualHours": "0.00",
+      "discipline": "management"
+    },
+    {
+      "wbsCode": "1.1",
+      "name": "Requirements Gathering",
+      "description": "Collect and document requirements",
+      "status": "not-started",
+      "priority": "critical",
+      "progress": 0,
+      "assignedTo": "ENG-LEAD",
+      "discipline": "engineering"
+    },
+    {
+      "wbsCode": "2",
+      "name": "Phase 2 - Execution",
+      "description": "Main execution phase",
+      "status": "not-started",
+      "priority": "critical",
+      "progress": 0,
+      "assignedTo": "CONST-DIR",
+      "discipline": "construction"
+    }
+  ],
+  "risks": [
+    {
+      "code": "RISK-001",
+      "title": "Example Risk",
+      "description": "Description of the risk",
+      "category": "technical",
+      "probability": 3,
+      "impact": "medium",
+      "status": "identified",
+      "owner": null,
+      "mitigationPlan": "Mitigation strategy"
+    }
+  ],
+  "issues": [
+    {
+      "code": "ISS-001",
+      "title": "Example Issue",
+      "description": "Description of the issue",
+      "priority": "medium",
+      "status": "open",
+      "assignedTo": null,
+      "reportedBy": null,
+      "resolution": null
+    }
+  ],
+  "stakeholders": [
+    {
+      "name": "Project Sponsor",
+      "role": "sponsor",
+      "organization": "Client Organization",
+      "email": "sponsor@example.com",
+      "phone": "+1-555-0100",
+      "influence": 5,
+      "interest": 5
+    }
+  ],
+  "costItems": [
+    {
+      "description": "Equipment Purchase",
+      "category": "equipment",
+      "budgeted": "500000.00",
+      "actual": "0.00",
+      "currency": "USD"
+    }
+  ],
+  "_instructions": {
+    "usage": "Copy this template and modify for your project. You can also provide this template to AI tools (ChatGPT, Claude, Gemini) as a reference format.",
+    "wbsHierarchy": "WBS codes define parent-child relationships: '1' is parent of '1.1', which is parent of '1.1.1'. Maximum 5 levels.",
+    "flexibleFields": {
+      "discipline": "Any text accepted (e.g., 'management', 'engineering', 'procurement'). Known values auto-map to standard categories.",
+      "assignedTo": "Any text identifier (e.g., 'PM-01', 'ENG-LEAD'). Stored as label - no user account required."
+    },
+    "validEnums": {
+      "taskStatus": [
+        "not-started",
+        "in-progress",
+        "review",
+        "completed",
+        "on-hold"
+      ],
+      "taskPriority": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "riskStatus": [
+        "identified",
+        "assessed",
+        "mitigating",
+        "closed"
+      ],
+      "riskImpact": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "issueStatus": [
+        "open",
+        "in-progress",
+        "resolved",
+        "closed"
+      ],
+      "issuePriority": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "stakeholderRole": [
+        "sponsor",
+        "client",
+        "team-member",
+        "contractor",
+        "consultant",
+        "regulatory",
+        "vendor",
+        "other"
+      ],
+      "costCategory": [
+        "labor",
+        "materials",
+        "equipment",
+        "subcontractor",
+        "overhead",
+        "permits",
+        "contingency",
+        "construction",
+        "administrative",
+        "other"
+      ],
+      "discipline": [
+        "general",
+        "civil",
+        "structural",
+        "mechanical",
+        "electrical",
+        "instrumentation",
+        "piping",
+        "process",
+        "hse",
+        "qa-qc",
+        "procurement",
+        "construction",
+        "commissioning",
+        "management",
+        "engineering"
+      ],
+      "currency": [
+        "USD",
+        "EUR",
+        "GBP",
+        "CAD",
+        "AUD",
+        "JPY",
+        "CNY",
+        "INR",
+        "BRL",
+        "MXN",
+        "SAR",
+        "AED",
+        "SGD",
+        "HKD",
+        "KRW"
+      ],
+      "_note": "discipline is now FLEXIBLE - any text is accepted and preserved"
+    },
+    "tips": [
+      "Priority must be: low, medium, high, or critical (not 'normal')",
+      "Risk status must be: identified, assessed, mitigating, or closed (not 'active')",
+      "Dates should be ISO 8601 format",
+      "Numbers should be strings (e.g., '1000.00')",
+      "discipline: ANY text is now accepted - use your own terminology",
+      "assignedTo: Use any identifier (PM-01, ENG-LEAD) - no user account needed"
+    ],
+    "labelManagement": "After import, use Label Management to normalize discipline/assignee values for consistency."
+  }
+}

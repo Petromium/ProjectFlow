@@ -85,8 +85,8 @@ export async function fetchECBRates(date?: Date): Promise<Map<string, number>> {
 
     // Parse rate entries
     for (const cube of dailyCubes) {
-      const currency = cube.$.currency || cube.currency;
-      const rate = cube.$.rate || cube.rate;
+      const currency = cube?.$?.currency || cube?.currency;
+      const rate = cube?.$?.rate || cube?.rate;
       if (currency && rate) {
         rates.set(currency.toUpperCase(), parseFloat(rate));
       }

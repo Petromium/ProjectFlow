@@ -1,0 +1,453 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EPC PMIS Project Import Schema",
+  "description": "JSON Schema for importing project data into EPC PMIS. Use this schema when generating project JSON with AI tools like ChatGPT, Claude, or Gemini.",
+  "version": "1.0",
+  "type": "object",
+  "required": [
+    "version",
+    "project"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version, must be '1.0'"
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name",
+          "maxLength": 255
+        },
+        "code": {
+          "type": "string",
+          "description": "Project code (e.g., SOLAR-2024-001)",
+          "maxLength": 50
+        },
+        "description": {
+          "type": "string",
+          "description": "Project description"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planning",
+            "active",
+            "on-hold",
+            "completed",
+            "cancelled"
+          ],
+          "default": "active"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 date (e.g., 2025-01-15T00:00:00.000Z)"
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "budget": {
+          "type": "string",
+          "description": "Budget amount as string (e.g., '75000000.00')"
+        },
+        "currency": {
+          "type": "string",
+          "enum": [
+            "USD",
+            "EUR",
+            "GBP",
+            "CAD",
+            "AUD",
+            "JPY",
+            "CNY",
+            "INR",
+            "BRL",
+            "MXN",
+            "SAR",
+            "AED",
+            "SGD",
+            "HKD",
+            "KRW"
+          ],
+          "default": "USD"
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "description": "WBS task hierarchy. Use wbsCode to define hierarchy (e.g., '1', '1.1', '1.1.1' for parent-child relationships)",
+      "items": {
+        "type": "object",
+        "required": [
+          "wbsCode",
+          "name"
+        ],
+        "properties": {
+          "wbsCode": {
+            "type": "string",
+            "description": "WBS code defines hierarchy. Examples: '1' (level 1), '1.1' (child of 1), '1.1.2' (child of 1.1). Max 5 levels.",
+            "pattern": "^[0-9]+(\\.[0-9]+){0,4}$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Task name",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not-started",
+              "in-progress",
+              "review",
+              "completed",
+              "on-hold"
+            ],
+            "default": "not-started"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "default": "medium",
+            "description": "IMPORTANT: Use 'medium' not 'normal'"
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 0
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "assignedTo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Assignee identifier (e.g., 'PM-01', 'ENG-LEAD'). Stored as text - no user account required."
+          },
+          "estimatedHours": {
+            "type": "string",
+            "description": "Estimated hours as string (e.g., '480.00')"
+          },
+          "actualHours": {
+            "type": "string",
+            "description": "Actual hours as string"
+          },
+          "discipline": {
+            "type": "string",
+            "description": "FLEXIBLE: Any discipline text is accepted (e.g., 'management', 'engineering', 'procurement'). Known values auto-map to standard categories. Original text preserved for reporting.",
+            "examples": [
+              "management",
+              "engineering",
+              "civil",
+              "mechanical",
+              "electrical",
+              "procurement",
+              "construction"
+            ]
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Risk code (e.g., RISK-001). Auto-generated if not provided."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "description": "Risk category (freeform text)"
+          },
+          "probability": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "1-5 scale (1=Very Low, 5=Very High)"
+          },
+          "impact": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "default": "medium"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "identified",
+              "assessed",
+              "mitigating",
+              "closed"
+            ],
+            "default": "identified",
+            "description": "IMPORTANT: Use 'identified' not 'active'"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Risk owner identifier"
+          },
+          "mitigationPlan": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Issue code (e.g., ISS-001). Auto-generated if not provided."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "default": "medium"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "in-progress",
+              "resolved",
+              "closed"
+            ],
+            "default": "open"
+          },
+          "assignedTo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reportedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "stakeholders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "sponsor",
+              "client",
+              "team-member",
+              "contractor",
+              "consultant",
+              "regulatory",
+              "vendor",
+              "other"
+            ],
+            "default": "other"
+          },
+          "organization": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "influence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "1-5 scale"
+          },
+          "interest": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "1-5 scale"
+          }
+        }
+      }
+    },
+    "costItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "labor",
+              "materials",
+              "equipment",
+              "subcontractor",
+              "overhead",
+              "permits",
+              "contingency",
+              "construction",
+              "administrative",
+              "other"
+            ],
+            "default": "other"
+          },
+          "budgeted": {
+            "type": "string",
+            "description": "Budgeted amount as string"
+          },
+          "actual": {
+            "type": "string",
+            "description": "Actual amount as string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CAD",
+              "AUD",
+              "JPY",
+              "CNY",
+              "INR",
+              "BRL",
+              "MXN",
+              "SAR",
+              "AED",
+              "SGD",
+              "HKD",
+              "KRW"
+            ],
+            "default": "USD"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "project": {
+        "name": "Example Solar Project",
+        "code": "SOLAR-2025-001",
+        "status": "active",
+        "budget": "50000000.00",
+        "currency": "USD"
+      },
+      "tasks": [
+        {
+          "wbsCode": "1",
+          "name": "Engineering",
+          "status": "in-progress",
+          "priority": "high",
+          "progress": 50
+        },
+        {
+          "wbsCode": "1.1",
+          "name": "Civil Design",
+          "status": "completed",
+          "priority": "critical",
+          "progress": 100
+        }
+      ]
+    }
+  ],
+  "valueMappings": {
+    "description": "The import system will automatically map these common alternative values:",
+    "taskPriority": {
+      "'normal' → 'medium'": true,
+      "'urgent' → 'critical'": true
+    },
+    "riskStatus": {
+      "'active' → 'identified'": true,
+      "'open' → 'identified'": true,
+      "'monitoring' → 'assessed'": true
+    },
+    "stakeholderRole": {
+      "'owner' → 'sponsor'": true,
+      "'customer' → 'client'": true,
+      "'regulator' → 'regulatory'": true
+    }
+  }
+}

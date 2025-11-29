@@ -439,12 +439,41 @@ export function TopBar() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Create New</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-new-task">New Task</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-risk">New Risk</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-issue">New Issue</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-change">Change Request</DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-task"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/tasks?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Task
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-risk"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/risks?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Risk
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-issue"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/issues?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Issue
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-change"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/change-requests?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            Change Request
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-new-project">New Project</DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-project"
+            onClick={() => navigate("/?action=new-project")}
+          >
+            New Project
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -458,12 +487,41 @@ export function TopBar() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Create New</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-new-task">New Task</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-risk">New Risk</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-issue">New Issue</DropdownMenuItem>
-          <DropdownMenuItem data-testid="menu-item-new-change">Change Request</DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-task"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/tasks?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Task
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-risk"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/risks?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Risk
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-issue"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/issues?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            New Issue
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-change"
+            onClick={() => selectedProjectId && navigate(`/projects/${selectedProjectId}/change-requests?action=new`)}
+            disabled={!selectedProjectId}
+          >
+            Change Request
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="menu-item-new-project">New Project</DropdownMenuItem>
+          <DropdownMenuItem 
+            data-testid="menu-item-new-project"
+            onClick={() => navigate("/?action=new-project")}
+          >
+            New Project
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -55,6 +55,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useProject } from "@/contexts/ProjectContext";
+import Papa from "papaparse";
 
 export default function ContactsPage() {
   const { selectedOrgId, selectedProjectId } = useProject();
@@ -162,34 +163,49 @@ export default function ContactsPage() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        // Simple CSV parser
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '')); // Remove quotes
-        
-        const parsedContacts = lines.slice(1).filter(l => l.trim()).map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-          const contact: any = {};
-          headers.forEach((header, i) => {
-            // Map common CSV headers to schema
-            const key = header.toLowerCase();
-            if (key.includes('first')) contact.firstName = values[i];
-            else if (key.includes('last')) contact.lastName = values[i];
-            else if (key.includes('email')) contact.email = values[i];
-            else if (key.includes('phone')) contact.phone = values[i];
-            else if (key.includes('company')) contact.company = values[i];
-            else if (key.includes('title')) contact.jobTitle = values[i];
-            else if (key.includes('type')) contact.type = values[i];
-            else if (key.includes('notes')) contact.notes = values[i];
-          });
-          return contact;
-        });
-        
-        importContactsMutation.mutate(parsedContacts);
-      };
-      reader.readAsText(file);
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          // Log raw results for debugging
+          console.log("Parsed CSV results:", results);
+
+          // Map CSV fields to Contact schema with flexible column name matching
+          const parsedContacts = results.data.map((row: any) => {
+            // Normalize keys to lowercase for easier matching
+            const normalizedRow: any = {};
+            Object.keys(row).forEach(key => {
+              normalizedRow[key.toLowerCase().replace(/[^a-z0-9]/g, '')] = row[key];
+            });
+
+            return {
+              firstName: normalizedRow['firstname'] || normalizedRow['first'] || row['First Name'] || '',
+              lastName: normalizedRow['lastname'] || normalizedRow['last'] || row['Last Name'] || '',
+              email: normalizedRow['email'] || normalizedRow['mail'] || row['Email'] || undefined,
+              phone: normalizedRow['phone'] || normalizedRow['mobile'] || normalizedRow['tel'] || row['Phone'] || undefined,
+              company: normalizedRow['company'] || normalizedRow['organization'] || row['Company'] || undefined,
+              jobTitle: normalizedRow['jobtitle'] || normalizedRow['title'] || normalizedRow['role'] || row['Job Title'] || undefined,
+              type: normalizedRow['type'] || row['Type'] || 'other',
+              notes: normalizedRow['notes'] || row['Notes'] || undefined,
+            };
+          }).filter((c: any) => c.firstName || c.lastName || c.email); // Ensure at least some data exists
+
+          if (parsedContacts.length === 0) {
+            toast({ 
+              title: "Parse Error", 
+              description: "No valid contacts found in CSV. Please check column headers.", 
+              variant: "destructive" 
+            });
+            return;
+          }
+
+          importContactsMutation.mutate(parsedContacts);
+        },
+        error: (error) => {
+          console.error("CSV Parse Error:", error);
+          toast({ title: "CSV Parse Error", description: error.message, variant: "destructive" });
+        }
+      });
     }
   };
 

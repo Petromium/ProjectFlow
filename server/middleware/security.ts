@@ -16,9 +16,9 @@ export function configureHelmet() {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for Tailwind
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images
-        connectSrc: ["'self'", "ws:", "wss:"], // Allow WebSocket connections
+        connectSrc: ["'self'", "ws:", "wss:", "*"], // Allow WebSocket connections and external APIs
         fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Paperclip, Image as ImageIcon } from "lucide-react";
 import { useCreateMessage } from "@/hooks/useMessages";
+import { useChat } from "@/hooks/useChat";
 import type { InsertMessage } from "@shared/schema";
 
 interface ChatInputProps {

@@ -12,9 +12,39 @@ const openai = openaiApiKey ? new OpenAI({
 
 // Initialize Google Vertex AI (Gemini)
 const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GCLOUD_PROJECT;
-const googleLocation = process.env.GOOGLE_LOCATION || 'us-central1';
-const vertexAI = googleProjectId ? new VertexAI({ project: googleProjectId, location: googleLocation }) : null;
 const GEMINI_MODEL = 'gemini-1.5-flash-001';
+
+// Region selection: Automatically determines best regions based on user location
+// TODO: Enhance to use user's actual location from profile/settings when available
+function getPreferredRegions(userLocation?: string | null): string[] {
+  // If user location is provided, prioritize regions closest to user
+  // For now, we use intelligent defaults that try all major regions
+  // Future: Map user location (country/timezone) to nearest GCP regions
+  
+  // Smart default: Try all major regions in order of global coverage
+  // This ensures best availability regardless of where the user is located
+  return [
+    'us-central1',      // United States (Iowa) - Most reliable, best model availability
+    'europe-west1',     // Belgium - Good for Europe/Middle East
+    'me-central1',      // Qatar - Closest to Middle East
+    'asia-southeast1', // Singapore - Good for Asia-Pacific
+  ];
+}
+
+// Create VertexAI instances for each region (lazy initialization)
+const vertexAIClients: Map<string, VertexAI> = new Map();
+
+function getVertexAIClient(location: string): VertexAI {
+  if (!googleProjectId) return null as any;
+  
+  if (!vertexAIClients.has(location)) {
+    vertexAIClients.set(location, new VertexAI({ 
+      project: googleProjectId, 
+      location: location 
+    }));
+  }
+  return vertexAIClients.get(location)!;
+}
 
 // Define available functions for the AI assistant (OpenAI Format)
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -369,84 +399,124 @@ function convertToolsToGemini(tools: any[]) {
   });
 }
 
-// Helper function for Gemini chat
+// Helper function for Gemini chat with region fallback
 async function chatWithGemini(
   messages: ChatMessage[],
   systemContent: string,
   storage: IStorage,
   userId: string
 ): Promise<ChatResponse> {
-  if (!vertexAI) throw new Error("Vertex AI not initialized");
+  if (!googleProjectId) throw new Error("Vertex AI not initialized - GOOGLE_PROJECT_ID not set");
 
-  const generativeModel = vertexAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    systemInstruction: { parts: [{ text: systemContent }] },
-    tools: [{ functionDeclarations: convertToolsToGemini(tools) }]
-  });
+  // Get user location if available (future enhancement)
+  // TODO: Fetch user's location/preference from database when user profile includes location field
+  const userLocation: string | null = null; // Placeholder for future user location
 
-  const history: Content[] = [];
-  let lastUserMessage = "";
+  const preferredRegions = getPreferredRegions(userLocation);
+  let lastError: Error | null = null;
 
-  // Construct history. Skip the last user message as it's sent in sendMessage
-  // Also separate system message (passed in init)
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
-    if (msg.role === 'system') continue; // System instruction handled separately
+  // Try each region in order until one works
+  for (const region of preferredRegions) {
+    try {
+      const vertexAI = getVertexAIClient(region);
+      const generativeModel = vertexAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: { parts: [{ text: systemContent }] },
+        tools: [{ functionDeclarations: convertToolsToGemini(tools) }]
+      });
 
-    if (i === messages.length - 1 && msg.role === 'user') {
-      lastUserMessage = msg.content;
-      continue;
-    }
+      const history: Content[] = [];
+      let lastUserMessage = "";
 
-    history.push({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    });
-  }
+      // Construct history. Skip the last user message as it's sent in sendMessage
+      // Also separate system message (passed in init)
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        if (msg.role === 'system') continue; // System instruction handled separately
 
-  const chatSession = generativeModel.startChat({
-    history: history,
-  });
-
-  let result = await chatSession.sendMessage(lastUserMessage);
-  let response = result.response;
-  let totalTokens = result.response.usageMetadata?.totalTokenCount || 0;
-  
-  const functionCallsExecuted: Array<{ name: string; args: any; result: string }> = [];
-
-  // Handle tool calls loop
-  while (response.candidates?.[0]?.content?.parts?.some(p => p.functionCall)) {
-    const parts = response.candidates[0].content.parts;
-    const functionCallPart = parts.find(p => p.functionCall);
-
-    if (functionCallPart && functionCallPart.functionCall) {
-      const { name, args } = functionCallPart.functionCall;
-      
-      const executionResult = await executeFunctionCall(name, args, storage, userId);
-      functionCallsExecuted.push({ name, args, result: executionResult });
-
-      // Send result back to model
-      result = await chatSession.sendMessage([{
-        functionResponse: {
-          name: name,
-          response: { content: executionResult } 
+        if (i === messages.length - 1 && msg.role === 'user') {
+          lastUserMessage = msg.content;
+          continue;
         }
-      }]);
+
+        history.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        });
+      }
+
+      const chatSession = generativeModel.startChat({
+        history: history,
+      });
+
+      let result = await chatSession.sendMessage(lastUserMessage);
+      let response = result.response;
+      let totalTokens = result.response.usageMetadata?.totalTokenCount || 0;
       
-      response = result.response;
-      totalTokens += result.response.usageMetadata?.totalTokenCount || 0;
-    } else {
-      break; 
+      const functionCallsExecuted: Array<{ name: string; args: any; result: string }> = [];
+
+      // Handle tool calls loop
+      while (response.candidates?.[0]?.content?.parts?.some(p => p.functionCall)) {
+        const parts = response.candidates[0].content.parts;
+        const functionCallPart = parts.find(p => p.functionCall);
+
+        if (functionCallPart && functionCallPart.functionCall) {
+          const { name, args } = functionCallPart.functionCall;
+          
+          const executionResult = await executeFunctionCall(name, args, storage, userId);
+          functionCallsExecuted.push({ name, args, result: executionResult });
+
+          // Send result back to model
+          result = await chatSession.sendMessage([{
+            functionResponse: {
+              name: name,
+              response: { content: executionResult } 
+            }
+          }]);
+          
+          response = result.response;
+          totalTokens += result.response.usageMetadata?.totalTokenCount || 0;
+        } else {
+          break; 
+        }
+      }
+
+      const finalText = response.candidates?.[0]?.content?.parts?.map(p => p.text).join(' ') || "No response generated";
+
+      // Success! Log which region worked (for debugging)
+      if (region !== preferredRegions[0]) {
+        console.log(`[Vertex AI] Using fallback region: ${region} (primary ${preferredRegions[0]} unavailable)`);
+      }
+
+      return {
+        message: finalText,
+        tokensUsed: totalTokens,
+        functionCalls: functionCallsExecuted.length > 0 ? functionCallsExecuted : undefined
+      };
+    } catch (error: any) {
+      // Check if it's a region/model availability error
+      const errorMessage = error?.message?.toLowerCase() || '';
+      const isRegionError = errorMessage.includes('not found') || 
+                           errorMessage.includes('not available') ||
+                           errorMessage.includes('permission denied') ||
+                           errorMessage.includes('invalid location') ||
+                           error.code === 404 ||
+                           error.code === 403;
+
+      if (isRegionError && region !== preferredRegions[preferredRegions.length - 1]) {
+        // This region failed, try next one
+        lastError = error;
+        console.log(`[Vertex AI] Region ${region} failed, trying fallback...`);
+        continue;
+      } else {
+        // Either not a region error, or we've exhausted all regions
+        throw error;
+      }
     }
   }
 
-  const finalText = response.candidates?.[0]?.content?.parts?.map(p => p.text).join(' ') || "No response generated";
-
-  return {
-    message: finalText,
-    tokensUsed: totalTokens,
-    functionCalls: functionCallsExecuted.length > 0 ? functionCallsExecuted : undefined
-  };
+  // If we get here, all regions failed
+  throw lastError || new Error("All Vertex AI regions failed");
 }
 
 export async function chatWithAssistant(
@@ -467,7 +537,7 @@ Focus on EPC industry best practices and PMI standards.
 ${projectId ? `Current project context: Project ID ${projectId}` : 'No project selected. Ask user to select a project first.'}`;
 
   // Prefer Gemini if configured
-  if (vertexAI) {
+  if (googleProjectId) {
     try {
       return await chatWithGemini(messages, systemContent, storage, userId);
     } catch (error: any) {

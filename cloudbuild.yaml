@@ -1,0 +1,113 @@
+# Cloud Build Configuration for ProjectFlow
+# This file defines the CI/CD pipeline for Google Cloud Build
+
+steps:
+  # Step 1: Install dependencies
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['ci']
+    id: 'install-dependencies'
+
+  # Step 2: Run TypeScript type checking
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['run', 'check']
+    id: 'type-check'
+    waitFor: ['install-dependencies']
+
+  # Step 3: Run unit tests
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['test', '--', '--run']
+    id: 'unit-tests'
+    waitFor: ['type-check']
+    env:
+      - 'NODE_ENV=test'
+
+  # Step 4: Build client (Vite)
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+    id: 'build-client'
+    waitFor: ['unit-tests']
+    env:
+      - 'NODE_ENV=production'
+
+  # Step 5: Build server (esbuild)
+  # Note: The build script already includes server build
+  # This step is included for clarity
+  - name: 'node:18'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - 'npm run build'
+    id: 'build-server'
+    waitFor: ['build-client']
+
+  # Step 6: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/projectflow:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/projectflow:latest'
+      - '.'
+    id: 'build-image'
+    waitFor: ['build-server']
+
+  # Step 7: Push Docker image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/projectflow:$SHORT_SHA'
+    id: 'push-image-sha'
+    waitFor: ['build-image']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/projectflow:latest'
+    id: 'push-image-latest'
+    waitFor: ['build-image']
+
+  # Step 8: Deploy to Cloud Run (optional - uncomment when ready)
+  # - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  #   entrypoint: gcloud
+  #   args:
+  #     - 'run'
+  #     - 'deploy'
+  #     - 'projectflow'
+  #     - '--image'
+  #     - 'gcr.io/$PROJECT_ID/projectflow:$SHORT_SHA'
+  #     - '--region'
+  #     - 'us-central1'
+  #     - '--platform'
+  #     - 'managed'
+  #     - '--allow-unauthenticated'
+  #   id: 'deploy-cloud-run'
+  #   waitFor: ['push-image-sha']
+
+# Images to be pushed to the registry
+images:
+  - 'gcr.io/$PROJECT_ID/projectflow:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/projectflow:latest'
+
+# Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+# Timeout for the entire build
+timeout: '1800s'
+
+# Substitution variables (can be overridden)
+substitutions:
+  _SERVICE_NAME: 'projectflow'
+  _REGION: 'us-central1'
+
+# Tags for the build
+tags:
+  - 'projectflow'
+  - 'ci-cd'
+

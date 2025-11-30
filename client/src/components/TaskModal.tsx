@@ -1951,7 +1951,7 @@ export function TaskModal({
             </div>
         </Tabs>
 
-        <DialogFooter className="gap-2 shrink-0 border-t pt-4">
+        <DialogFooter className="gap-2 shrink-0 border-t p-4">
           <Button variant="outline" onClick={handleClose} disabled={isLoading} data-testid="button-cancel">
             Cancel
           </Button>

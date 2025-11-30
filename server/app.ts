@@ -15,26 +15,22 @@ import {
   validateEnvironmentVariables,
   apiLimiter,
 } from "./middleware/security";
+import { logger } from "./services/cloudLogging";
+import { recordApiResponseTime, recordApiRequestCount, recordErrorCount } from "./services/cloudMonitoring";
 
 // Validate environment variables on startup
 try {
   validateEnvironmentVariables();
 } catch (error) {
-  console.error("[SECURITY] Environment validation failed:", error);
+  logger.error("[SECURITY] Environment validation failed", error);
   if (process.env.NODE_ENV === "production") {
     process.exit(1);
   }
 }
 
 export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
+  // Use Cloud Logging logger instead of console.log
+  logger.info(message, { source });
 }
 
 export const app = express();
@@ -73,19 +69,36 @@ app.use((req, res, next) => {
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
-  res.on("finish", () => {
+  res.on("finish", async () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+      // Log HTTP request with Cloud Logging
+      logger.httpRequest(
+        req.method,
+        path,
+        res.statusCode,
+        duration,
+        {
+          httpRequest: {
+            requestMethod: req.method,
+            requestUrl: path,
+            status: res.statusCode,
+            userAgent: req.get("user-agent"),
+            remoteIp: req.ip || req.socket.remoteAddress,
+          },
+        }
+      );
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
+      // Record metrics
+      await recordApiResponseTime(path, req.method, duration, res.statusCode);
+      await recordApiRequestCount(path, req.method, res.statusCode);
 
-      log(logLine);
+      // Record error metrics for 5xx errors
+      if (res.statusCode >= 500) {
+        await recordErrorCount("server_error", path);
+      } else if (res.statusCode >= 400) {
+        await recordErrorCount("client_error", path);
+      }
     }
   });
 
@@ -97,9 +110,21 @@ export default async function runApp(
 ) {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use(async (err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
+    // Log error with Cloud Logging
+    logger.error("Unhandled error in Express middleware", err, {
+      httpRequest: {
+        requestMethod: _req.method,
+        requestUrl: _req.path,
+        status,
+      },
+    });
+
+    // Record error metric
+    await recordErrorCount("unhandled_error", _req.path);
 
     res.status(status).json({ message });
     throw err;
@@ -122,6 +147,9 @@ export default async function runApp(
     port,
     host: "0.0.0.0",
   }, () => {
-    log(`serving on port ${port}`);
+    logger.info(`Server started and serving on port ${port}`, {
+      port,
+      environment: process.env.NODE_ENV || "development",
+    });
   });
 }

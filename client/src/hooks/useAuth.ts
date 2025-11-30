@@ -33,6 +33,7 @@ export function useAuth() {
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchInterval: false, // Don't auto-refetch on auth error
     refetchOnWindowFocus: false,
+    refetchOnMount: false, // Prevent infinite loops when AppContent unmounts/remounts
   });
 
   const logoutMutation = useMutation({

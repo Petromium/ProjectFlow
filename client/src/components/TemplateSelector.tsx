@@ -48,49 +48,51 @@ export function TemplateSelector({ onSelect, selectedTemplateId }: TemplateSelec
     : templates.filter(t => t.category === categoryFilter);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full min-h-0 space-y-4">
       <Tabs value={categoryFilter} onValueChange={setCategoryFilter} className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto">
           {categories.map(cat => (
-            <TabsTrigger key={cat} value={cat} className="capitalize">
+            <TabsTrigger key={cat} value={cat} className="capitalize min-h-[44px]">
               {cat}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2">
-        {filteredTemplates.map((template) => (
-          <Card 
-            key={template.id} 
-            className={cn(
-              "cursor-pointer transition-all hover:border-primary",
-              selectedTemplateId === template.id ? "border-primary ring-1 ring-primary" : ""
-            )}
-            onClick={() => onSelect(template)}
-          >
-            <CardHeader className="p-4 pb-2">
-              <div className="flex justify-between items-start">
-                <Badge variant="secondary" className="mb-2">{template.category}</Badge>
-                {selectedTemplateId === template.id && <Check className="h-4 w-4 text-primary" />}
-              </div>
-              <CardTitle className="text-base">{template.name}</CardTitle>
-              <CardDescription className="line-clamp-2 text-xs">{template.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded">
-                  <Info className="h-3 w-3" />
-                  {template.metadata?.taskCount || 0} Tasks
+      <ScrollArea className="flex-1 min-h-0 pr-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
+          {filteredTemplates.map((template) => (
+            <Card 
+              key={template.id} 
+              className={cn(
+                "cursor-pointer transition-all hover:border-primary min-h-[120px]",
+                selectedTemplateId === template.id ? "border-primary ring-1 ring-primary" : ""
+              )}
+              onClick={() => onSelect(template)}
+            >
+              <CardHeader className="p-4 pb-2">
+                <div className="flex justify-between items-start">
+                  <Badge variant="secondary" className="mb-2">{template.category}</Badge>
+                  {selectedTemplateId === template.id && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
                 </div>
-                <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded capitalize">
-                  {template.metadata?.complexity || "Medium"} Complexity
+                <CardTitle className="text-base">{template.name}</CardTitle>
+                <CardDescription className="line-clamp-2 text-xs">{template.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded min-h-[28px]">
+                    <Info className="h-3 w-3 flex-shrink-0" />
+                    {template.metadata?.taskCount || 0} Tasks
+                  </div>
+                  <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded capitalize min-h-[28px]">
+                    {template.metadata?.complexity || "Medium"} Complexity
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

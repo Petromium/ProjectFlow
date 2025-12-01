@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -301,7 +301,7 @@ export default function ProjectsPage() {
         project={editingProject}
         organizationId={selectedOrgId}
         onCreate={createProjectMutation.mutate}
-        onUpdate={(data) => editingProject && updateProjectMutation.mutate({ id: editingProject.id, ...data })}
+        onUpdate={(data) => editingProject && updateProjectMutation.mutate({ ...data, id: editingProject.id })}
       />
 
       {/* Delete Confirmation Dialog */}

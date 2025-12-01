@@ -48,16 +48,15 @@ const projectTabs = [
   { title: "Email Templates", icon: Mail, path: "/email-templates" },
   { title: "Documents", icon: FileText, path: "/documents" },
   { title: "Analytics", icon: BarChart3, path: "/analytics" },
-  { title: "Settings", icon: Settings, path: "/settings" },
 ];
 
 const pmoTabs = [
-  { title: "PMO Dashboard", icon: LayoutDashboard, path: "/pmo/dashboard" },
+  { title: "Dashboard", icon: LayoutDashboard, path: "/pmo/dashboard" },
   { title: "Projects", icon: FolderKanban, path: "/pmo/projects" },
   { title: "Contacts Directory", icon: Contact, path: "/pmo/contacts" },
   { title: "Calendar", icon: Calendar, path: "/pmo/calendar" },
   { title: "Inventory", icon: Package, path: "/pmo/inventory" },
-  { title: "User Management", icon: Users, path: "/users" },
+  { title: "Settings", icon: Settings, path: "/settings" },
 ];
 
 export function AppSidebar() {

@@ -678,8 +678,8 @@ export default function WBSPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge variant={getStatusColor(task.status)} className="text-xs h-5 px-2 shrink-0" data-testid={`badge-status-${task.id}`}>
-                    {task.status.replace("-", " ")}
-                  </Badge>
+                  {task.status.replace("-", " ")}
+                </Badge>
                   <Badge variant={getPriorityColor(task.priority)} className="text-xs h-5 px-2 shrink-0" data-testid={`badge-priority-${task.id}`}>
                     {task.priority}
                   </Badge>
@@ -694,7 +694,7 @@ export default function WBSPage() {
                     <div className="flex items-center gap-0.5" title={`${resourceCount} resource(s)`}>
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground font-medium">{resourceCount}</span>
-                    </div>
+                </div>
                   )}
                   {riskCount > 0 && (
                     <div className="flex items-center gap-0.5" title={`${riskCount} risk(s)`}>
@@ -752,7 +752,7 @@ export default function WBSPage() {
                     <span className="text-[10px]">
                       {Math.ceil((new Date((task as any).baselineFinish).getTime() - new Date((task as any).baselineStart).getTime()) / (1000 * 60 * 60 * 24))} days
                     </span>
-                  </div>
+                    </div>
                 ) : null}
                 
                 {/* Actual Dates */}
@@ -782,9 +782,9 @@ export default function WBSPage() {
                       <>
                         <span className="text-[10px]">-</span>
                         <span className="text-[10px]">{duration} days</span>
-                      </>
-                    )}
-                  </div>
+                    </>
+                  )}
+                </div>
                 ) : null}
               </div>
 
@@ -818,10 +818,10 @@ export default function WBSPage() {
 
               {/* Right Side: All other elements aligned to the right */}
               <div className="flex items-center gap-3 shrink-0">
-                {/* Status Badge */}
+              {/* Status Badge */}
                 <Badge variant={getStatusColor(task.status)} className="h-5 px-2 shrink-0" data-testid={`badge-status-${task.id}`}>
-                  {task.status.replace("-", " ")}
-                </Badge>
+                {task.status.replace("-", " ")}
+              </Badge>
 
                 {/* Priority/Risk Badge */}
                 <Badge variant={getPriorityColor(task.priority)} className="h-5 px-2 shrink-0" data-testid={`badge-priority-${task.id}`}>
@@ -875,7 +875,7 @@ export default function WBSPage() {
                     ))}
                   </div>
                   <span className="text-sm font-medium w-10 text-right shrink-0">{task.progress}%</span>
-                </div>
+              </div>
 
                 {/* Baseline & Actual Dates */}
                 <div className="text-xs text-muted-foreground min-w-[200px] flex flex-col items-end shrink-0 gap-0.5">
@@ -890,8 +890,8 @@ export default function WBSPage() {
                       <span className="text-[10px]">-</span>
                       <span className="text-[10px]">
                         {Math.ceil((new Date((task as any).baselineFinish).getTime() - new Date((task as any).baselineStart).getTime()) / (1000 * 60 * 60 * 24))} days
-                      </span>
-                    </div>
+                    </span>
+                  </div>
                   ) : null}
                   
                   {/* Actual Dates */}
@@ -906,8 +906,8 @@ export default function WBSPage() {
                       <span className="text-[10px]">
                         {Math.ceil((new Date(task.actualFinishDate).getTime() - new Date(task.actualStartDate).getTime()) / (1000 * 60 * 60 * 24))} days
                       </span>
-                    </div>
-                  ) : null}
+                  </div>
+                ) : null}
                   
                   {/* Fallback to planned dates if no baseline/actual */}
                   {!((task as any).baselineStart && (task as any).baselineFinish) && !(task.actualStartDate && task.actualFinishDate) && startDate && endDate ? (
@@ -917,30 +917,30 @@ export default function WBSPage() {
                         {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
                         {endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
-                      {duration && (
+                {duration && (
                         <>
                           <span className="text-[10px]">-</span>
                           <span className="text-[10px]">{duration} days</span>
                         </>
-                      )}
+                )}
                     </div>
                   ) : null}
-                </div>
+              </div>
 
-                {/* Assignee */}
+              {/* Assignee */}
                 <div className="flex items-center shrink-0">
-                  {task.assignedTo ? (
-                    <>
+                {task.assignedTo ? (
+                  <>
                       <Avatar className="h-6 w-6 shrink-0">
-                        <AvatarFallback className="text-xs">{getInitials(task.assignedTo)}</AvatarFallback>
-                      </Avatar>
+                      <AvatarFallback className="text-xs">{getInitials(task.assignedTo)}</AvatarFallback>
+                    </Avatar>
                       <span className="text-sm text-muted-foreground truncate max-w-[80px] ml-1">
-                        {task.assignedToName || "Assigned"}
-                      </span>
-                    </>
-                  ) : (
+                      {task.assignedToName || "Assigned"}
+                    </span>
+                  </>
+                ) : (
                     <span className="text-sm text-muted-foreground italic">Unassigned</span>
-                  )}
+                )}
                 </div>
               </div>
             </div>
@@ -1337,8 +1337,8 @@ export default function WBSPage() {
             const showDatesInside = baselineBarWidthPx > minWidthForDates;
             const baselineStartDate = new Date((task as any).baselineStart).toLocaleDateString("en-US", { month: "short", day: "numeric" });
             const baselineEndDate = new Date((task as any).baselineFinish).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-            
-            return (
+              
+              return (
               <>
                 {/* Dates outside bar (left side) - shown when bar is too small */}
                 {!showDatesInside && showBarStartDate && (
@@ -1380,8 +1380,8 @@ export default function WBSPage() {
                       )}
                       {showBarEndDate && (
                         <span className="truncate text-[10px]">{baselineEndDate}</span>
-                      )}
-                    </div>
+                  )}
+                </div>
                   )}
                   {/* Progress overlay */}
                   <div className="absolute inset-0 bg-white/20 rounded-md pointer-events-none" style={{ width: `${task.progress || 0}%` }}></div>
@@ -1401,7 +1401,7 @@ export default function WBSPage() {
                   </div>
                 )}
               </>
-            );
+              );
           })() : null}
 
           {/* Actual Bar (Bottom) - Actual dates - ORANGE */}
@@ -1427,11 +1427,11 @@ export default function WBSPage() {
                     }}
                   >
                     {actualStartDate}
-                  </div>
+          </div>
                 )}
                 
                 {/* Actual bar */}
-                <div
+            <div
                   className="absolute h-4 bg-orange-500 border-2 border-orange-600 rounded-sm overflow-hidden z-20 shadow-sm flex items-center px-1"
                   style={{
                     left: `${actualPos!.left}%`,
@@ -1451,7 +1451,7 @@ export default function WBSPage() {
                       {showBarEndDate && (
                         <span className="truncate ml-auto">{actualEndDate}</span>
                       )}
-                    </div>
+            </div>
                   )}
                 </div>
                 
@@ -2518,8 +2518,8 @@ export default function WBSPage() {
                               <div key={`top-${i}`} className="p-1 border-l border-border last:border-r-0 truncate text-muted-foreground">
                                 {typeof label === 'object' ? label.top : ''}
                               </div>
-                            ))}
-                          </div>
+                        ))}
+                      </div>
                           <div 
                             className="grid text-center text-sm font-semibold" 
                             style={{ 
@@ -2589,14 +2589,14 @@ export default function WBSPage() {
                     <div className="space-y-3">
                       <div>
                         <h4 className="text-xs font-medium mb-2 text-muted-foreground">Task Status Colors</h4>
-                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-green-500"></div><span>Completed</span></div>
-                          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-blue-500"></div><span>In Progress</span></div>
-                          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-purple-500"></div><span>In Review</span></div>
-                          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-amber-500"></div><span>On Hold</span></div>
-                          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-gray-400"></div><span>Not Started</span></div>
-                        </div>
-                      </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-green-500"></div><span>Completed</span></div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-blue-500"></div><span>In Progress</span></div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-purple-500"></div><span>In Review</span></div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-amber-500"></div><span>On Hold</span></div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-gray-400"></div><span>Not Started</span></div>
+                    </div>
+                  </div>
                       <div>
                         <h4 className="text-xs font-medium mb-2 text-muted-foreground">Gantt Bars</h4>
                         <div className="flex flex-wrap items-center gap-4 text-sm">

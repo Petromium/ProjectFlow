@@ -113,7 +113,7 @@ export default function KanbanPage() {
       grouped[key] = [];
     });
 
-    tasks.forEach((task) => {
+  tasks.forEach((task) => {
       // Find matching column
       const matchingColumn = columns.find(col => {
         if (col.customStatusId) {
@@ -133,8 +133,8 @@ export default function KanbanPage() {
         const fallbackKey = task.status;
         if (!grouped[fallbackKey]) grouped[fallbackKey] = [];
         grouped[fallbackKey].push(task);
-      }
-    });
+    }
+  });
 
     return grouped;
   }, [tasks, columns]);
@@ -266,23 +266,23 @@ export default function KanbanPage() {
           const columnTasks = groupedTasks[columnKey] || [];
           
           return (
-            <div 
-              key={column.id} 
-              className="flex flex-col min-h-[400px]"
-              onDragOver={handleDragOver}
+          <div 
+            key={column.id} 
+            className="flex flex-col min-h-[400px]"
+            onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, column)}
-              data-testid={`column-${column.id}`}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{column.title}</h3>
-                  <Badge variant="secondary" data-testid={`count-${column.id}`}>
+            data-testid={`column-${column.id}`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">{column.title}</h3>
+                <Badge variant="secondary" data-testid={`count-${column.id}`}>
                     {columnTasks.length}
-                  </Badge>
-                </div>
+                </Badge>
               </div>
+            </div>
 
-              <div className="space-y-3 flex-1 overflow-y-auto">
+            <div className="space-y-3 flex-1 overflow-y-auto">
                 {columnTasks.map((task) => (
                 <Card
                   key={task.id}

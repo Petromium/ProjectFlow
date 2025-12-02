@@ -35,7 +35,7 @@ export function configureHelmet() {
 }
 
 /**
- * General API rate limiter (stricter)
+ * General API rate limiter (IP-based)
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -45,6 +45,26 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req: Request) => {
     // Skip rate limiting for health checks
+    return req.path === "/health" || req.path === "/api/health";
+  },
+});
+
+/**
+ * Per-user API rate limiter (for authenticated requests)
+ * Uses user ID instead of IP address for better accuracy
+ */
+export const userApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Higher limit for authenticated users (200 requests per 15 min)
+  message: "Too many requests, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    // Use user ID if authenticated, fallback to IP
+    return (req as any).user?.id || req.ip || "anonymous";
+  },
+  skip: (req: Request) => {
+    // Skip for health checks
     return req.path === "/health" || req.path === "/api/health";
   },
 });
@@ -100,14 +120,23 @@ export function configureCORS() {
     }
 
     // Allow requests with no origin (like mobile apps or curl requests)
+    // Never use "*" when credentials are enabled (security risk)
     if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === "development") {
-      res.setHeader("Access-Control-Allow-Origin", origin || "*");
+      // Use first allowed origin as fallback instead of "*"
+      const allowedOrigin = origin || (allowedOrigins.length > 0 ? allowedOrigins[0] : null);
+      if (allowedOrigin) {
+        res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+      }
     } else {
       // In production, reject unknown origins
       if (process.env.NODE_ENV === "production") {
         return res.status(403).json({ message: "Origin not allowed" });
       }
-      res.setHeader("Access-Control-Allow-Origin", origin || "*");
+      // In development, allow but use first allowed origin instead of "*"
+      const fallbackOrigin = allowedOrigins.length > 0 ? allowedOrigins[0] : null;
+      if (fallbackOrigin) {
+        res.setHeader("Access-Control-Allow-Origin", fallbackOrigin);
+      }
     }
 
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
@@ -170,6 +199,7 @@ export function validateEnvironmentVariables(): void {
   ];
 
   const missing: string[] = [];
+  const invalid: string[] = [];
 
   for (const key of required) {
     if (!process.env[key]) {
@@ -180,6 +210,43 @@ export function validateEnvironmentVariables(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}\n` +
+      "Please check your .env file or environment configuration."
+    );
+  }
+
+  // Validate format of critical environment variables
+  if (process.env.DATABASE_URL) {
+    if (!process.env.DATABASE_URL.startsWith('postgres://') && 
+        !process.env.DATABASE_URL.startsWith('postgresql://') &&
+        !process.env.DATABASE_URL.startsWith('postgresql+ssl://')) {
+      invalid.push('DATABASE_URL must start with postgres://, postgresql://, or postgresql+ssl://');
+    }
+  }
+
+  if (process.env.SESSION_SECRET) {
+    if (process.env.SESSION_SECRET.length < 32) {
+      invalid.push('SESSION_SECRET must be at least 32 characters long');
+    }
+  }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const origins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+    const invalidOrigins = origins.filter(o => {
+      try {
+        new URL(o);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (invalidOrigins.length > 0) {
+      invalid.push(`ALLOWED_ORIGINS contains invalid URLs: ${invalidOrigins.join(', ')}`);
+    }
+  }
+
+  if (invalid.length > 0) {
+    throw new Error(
+      `Invalid environment variable formats:\n${invalid.join('\n')}\n` +
       "Please check your .env file or environment configuration."
     );
   }
@@ -204,6 +271,30 @@ export function validateEnvironmentVariables(): void {
       `[SECURITY] Recommended environment variables not set: ${missingRecommended.join(", ")}\n` +
       "Some features may not work correctly in production."
     );
+  }
+
+  // Validate format of critical environment variables
+  if (process.env.DATABASE_URL) {
+    if (!process.env.DATABASE_URL.startsWith('postgres://') && 
+        !process.env.DATABASE_URL.startsWith('postgresql://') &&
+        !process.env.DATABASE_URL.startsWith('postgresql+')) {
+      throw new Error('DATABASE_URL must be a valid PostgreSQL connection string');
+    }
+  }
+
+  if (process.env.SESSION_SECRET) {
+    if (process.env.SESSION_SECRET.length < 32) {
+      throw new Error('SESSION_SECRET must be at least 32 characters long');
+    }
+  }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const origins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+    for (const origin of origins) {
+      if (!origin.startsWith('http://') && !origin.startsWith('https://')) {
+        throw new Error(`Invalid origin format in ALLOWED_ORIGINS: ${origin}. Must start with http:// or https://`);
+      }
+    }
   }
 }
 

@@ -53,14 +53,22 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 5 * 60 * 1000, // 5 minutes - reasonable default for most data
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime) - keep unused data for 10 min
       retry: (failureCount, error: any) => {
-        if (error.message.includes("401") || error.message.includes("429")) return false;
+        const errorMsg = error?.message || "";
+        // Don't retry auth errors (401)
+        if (errorMsg.includes("401") || errorMsg.includes("Unauthorized")) return false;
+        // Don't retry rate limits (429) - wait for user action
+        if (errorMsg.includes("429") || errorMsg.includes("Too many requests")) return false;
+        // Don't retry client errors (4xx) - these are user errors
+        if (errorMsg.match(/^4\d{2}/)) return false;
+        // Retry network/server errors (5xx, network failures) up to 3 times
         return failureCount < 3;
       },
     },
     mutations: {
-      retry: false,
+      retry: false, // Mutations should not retry automatically
     },
   },
 });

@@ -1,4 +1,5 @@
 import { type Server } from "node:http";
+import crypto from "crypto";
 
 import express, {
   type Express,
@@ -58,9 +59,19 @@ app.use(sanitizeInput);
 // Apply general API rate limiting
 app.use("/api", apiLimiter);
 
+// Request ID middleware (add early for tracing)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // Generate request ID for tracing
+  const requestId = crypto.randomUUID();
+  (req as any).id = requestId;
+  res.setHeader('X-Request-ID', requestId);
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const requestId = (req as any).id || 'unknown';
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -135,8 +146,27 @@ export default async function runApp(
   await setup(app, server);
 
   // Initialize scheduler for background tasks (exchange rate sync, etc.)
-  const { initializeScheduler } = await import("./scheduler");
+  const { initializeScheduler, cleanupScheduler } = await import("./scheduler");
   initializeScheduler();
+  
+  // Cleanup on graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info("SIGTERM received, cleaning up...");
+    cleanupScheduler();
+    server.close(() => {
+      logger.info("Server closed");
+      process.exit(0);
+    });
+  });
+  
+  process.on('SIGINT', () => {
+    logger.info("SIGINT received, cleaning up...");
+    cleanupScheduler();
+    server.close(() => {
+      logger.info("Server closed");
+      process.exit(0);
+    });
+  });
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.

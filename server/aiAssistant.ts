@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { VertexAI, FunctionDeclarationSchemaType, Content, Part } from '@google-cloud/vertexai';
 import type { IStorage } from "./storage";
 import type { InsertTask, InsertRisk, InsertIssue, InsertStakeholder } from "@shared/schema";
+import { logger } from "./lib/logger";
 
 // Initialize OpenAI (legacy/fallback)
 const openaiApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -861,7 +862,7 @@ async function chatWithGemini(
 
       // Success! Log which region worked (for debugging)
       if (region !== preferredRegions[0]) {
-        console.log(`[Vertex AI] Using fallback region: ${region} (primary ${preferredRegions[0]} unavailable)`);
+        logger.debug(`[Vertex AI] Using fallback region: ${region} (primary ${preferredRegions[0]} unavailable)`);
       }
 
       return {
@@ -882,7 +883,7 @@ async function chatWithGemini(
       if (isRegionError && region !== preferredRegions[preferredRegions.length - 1]) {
         // This region failed, try next one
         lastError = error;
-        console.log(`[Vertex AI] Region ${region} failed, trying fallback...`);
+        logger.debug(`[Vertex AI] Region ${region} failed, trying fallback...`);
         continue;
       } else {
         // Either not a region error, or we've exhausted all regions
@@ -1042,7 +1043,7 @@ ${projectId ? `Current project context: Project ID ${projectId}` : 'No project s
       functionCalls: functionCalls.length > 0 ? functionCalls : undefined
     };
   } catch (error: any) {
-    console.error("Error in chatWithAssistant:", error);
+    logger.error("Error in chatWithAssistant", error instanceof Error ? error : new Error(String(error)));
     throw new Error(error.message || "Failed to get AI response");
   }
 }

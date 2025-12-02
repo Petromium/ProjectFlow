@@ -7,6 +7,9 @@ import { storage } from "../storage";
 import { renderEmailTemplate, buildTemplateContext, type TemplateContext } from "./templateEngine";
 import type { NotificationRule, NotificationLog, EmailTemplate, Task, Stakeholder, Resource, Contact } from "@shared/schema";
 import { logger } from "./cloudLogging";
+import { db } from "../db";
+import * as schema from "@shared/schema";
+import { eq, and, inArray } from "drizzle-orm";
 
 /**
  * Resolve recipients based on notification rule configuration
@@ -23,11 +26,14 @@ export async function resolveRecipients(
 
   switch (rule.recipientType) {
     case "individual":
-      // Add stakeholders
+      // Batch fetch stakeholders (fixes N+1)
       if (recipientConfig.stakeholderIds && recipientConfig.stakeholderIds.length > 0) {
-        for (const id of recipientConfig.stakeholderIds) {
-          const stakeholder = await storage.getStakeholder(id);
-          if (stakeholder && stakeholder.email) {
+        const stakeholders = await db.select()
+          .from(schema.stakeholders)
+          .where(inArray(schema.stakeholders.id, recipientConfig.stakeholderIds));
+        
+        for (const stakeholder of stakeholders) {
+          if (stakeholder.email) {
             recipients.push({
               email: stakeholder.email,
               name: stakeholder.name,
@@ -38,32 +44,51 @@ export async function resolveRecipients(
         }
       }
 
-      // Add resources
+      // Batch fetch resources (fixes N+1)
       if (recipientConfig.resourceIds && recipientConfig.resourceIds.length > 0) {
-        for (const id of recipientConfig.resourceIds) {
-          const resource = await storage.getResource(id);
-          if (resource && resource.type === "human") {
-            // Get email from linked contact if available
-            if (resource.contactId) {
-              const contact = await storage.getContact(resource.contactId);
-              if (contact && contact.email) {
-                recipients.push({
-                  email: contact.email,
-                  name: resource.name,
-                  type: "resource",
-                  id: resource.id,
-                });
-              }
+        const resources = await db.select()
+          .from(schema.resources)
+          .where(and(
+            inArray(schema.resources.id, recipientConfig.resourceIds),
+            eq(schema.resources.type, "human")
+          ));
+        
+        // Batch fetch contacts for resources that have contactId
+        const contactIds = resources
+          .map(r => r.contactId)
+          .filter((id): id is number => id !== null && id !== undefined);
+        
+        const contactsMap = new Map<number, Contact>();
+        if (contactIds.length > 0) {
+          const contacts = await db.select()
+            .from(schema.contacts)
+            .where(inArray(schema.contacts.id, contactIds));
+          contacts.forEach(c => contactsMap.set(c.id, c));
+        }
+        
+        for (const resource of resources) {
+          if (resource.contactId) {
+            const contact = contactsMap.get(resource.contactId);
+            if (contact && contact.email) {
+              recipients.push({
+                email: contact.email,
+                name: resource.name,
+                type: "resource",
+                id: resource.id,
+              });
             }
           }
         }
       }
 
-      // Add contacts
+      // Batch fetch contacts (fixes N+1)
       if (recipientConfig.contactIds && recipientConfig.contactIds.length > 0) {
-        for (const id of recipientConfig.contactIds) {
-          const contact = await storage.getContact(id);
-          if (contact && contact.email) {
+        const contacts = await db.select()
+          .from(schema.contacts)
+          .where(inArray(schema.contacts.id, recipientConfig.contactIds));
+        
+        for (const contact of contacts) {
+          if (contact.email) {
             recipients.push({
               email: contact.email,
               name: contact.name,

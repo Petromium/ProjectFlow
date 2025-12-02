@@ -1,6 +1,7 @@
 import { eq, and, desc, asc, isNull, inArray, sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import { db } from "./db";
+import { logger } from "./lib/logger";
 import type {
   InsertOrganization,
   Organization,
@@ -636,7 +637,7 @@ export class DatabaseStorage implements IStorage {
       organizationId: demoOrg.id,
       role: "owner",
     });
-    console.log(`Assigned user ${userId} to organization as owner`);
+    logger.info(`Assigned user to organization as owner`, { userId, organizationId: demoOrg.id });
   }
 
   // User Organizations

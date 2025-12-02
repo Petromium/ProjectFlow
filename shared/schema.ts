@@ -308,7 +308,14 @@ export const tasks = pgTable("tasks", {
   isCriticalPath: boolean("is_critical_path").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  projectIdIdx: index("tasks_project_id_idx").on(table.projectId),
+  parentIdIdx: index("tasks_parent_id_idx").on(table.parentId),
+  assignedToIdx: index("tasks_assigned_to_idx").on(table.assignedTo),
+  createdByIdx: index("tasks_created_by_idx").on(table.createdBy),
+  statusIdx: index("tasks_status_idx").on(table.status),
+  customStatusIdIdx: index("tasks_custom_status_id_idx").on(table.customStatusId),
+}));
 
 // Task Dependencies
 export const taskDependencies = pgTable("task_dependencies", {

@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
+import { db } from "./db";
+import * as schema from "@shared/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   insertOrganizationSchema,
   insertProjectSchema,
@@ -97,7 +100,7 @@ import {
   getLatestExchangeRate
 } from "./exchangeRateService";
 import { logUserActivity } from "./middleware/audit";
-import { uploadLimiter } from "./middleware/security";
+import { uploadLimiter, userApiLimiter } from "./middleware/security";
 import { wsManager } from "./websocket";
 import { schedulingService } from "./scheduling";
 import { db } from "./db";
@@ -138,8 +141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const user = await storage.getUser(userId);
       res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
+    } catch (error: any) {
+      logger.error("Error fetching user", error instanceof Error ? error : new Error(String(error)), { userId });
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
@@ -150,8 +153,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const organizations = await storage.getOrganizationsByUser(userId);
       res.json(organizations);
-    } catch (error) {
-      console.error("Error fetching organizations:", error);
+    } catch (error: any) {
+      logger.error("Error fetching organizations", error instanceof Error ? error : new Error(String(error)), { userId });
       res.status(500).json({ message: "Failed to fetch organizations" });
     }
   });
@@ -171,8 +174,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json(organization);
-    } catch (error) {
-      console.error("Error creating organization:", error);
+    } catch (error: any) {
+      logger.error("Error creating organization", error instanceof Error ? error : new Error(String(error)), { userId, data });
       res.status(400).json({ message: "Failed to create organization" });
     }
   });
@@ -190,19 +193,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const users = await storage.getUsersByOrganization(orgId);
-      // Get user roles in this organization
-      const usersWithRoles = await Promise.all(users.map(async (user) => {
-        const userOrgRel = await storage.getUserOrganization(user.id, orgId);
+      
+      // Batch fetch all user-organization relationships in one query (fixes N+1)
+      const userIds = users.map(u => u.id);
+      const userOrgs = userIds.length > 0 
+        ? await db.select().from(schema.userOrganizations)
+            .where(and(
+              eq(schema.userOrganizations.organizationId, orgId),
+              inArray(schema.userOrganizations.userId, userIds)
+            ))
+        : [];
+      
+      // Create a map for O(1) lookup
+      const userOrgMap = new Map(userOrgs.map(uo => [uo.userId, uo]));
+      
+      // Map users with their roles (no additional queries)
+      const usersWithRoles = users.map((user) => {
+        const userOrgRel = userOrgMap.get(user.id);
         return {
           ...user,
           role: userOrgRel?.role || 'member',
           joinedAt: userOrgRel?.createdAt || null,
         };
-      }));
+      });
 
       res.json(usersWithRoles);
-    } catch (error) {
-      console.error("Error fetching organization users:", error);
+    } catch (error: any) {
+      logger.error("Error fetching organization users", error instanceof Error ? error : new Error(String(error)), { userId, orgId });
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
@@ -298,12 +315,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const targetUserOrg = await storage.getUserOrganization(targetUserId, orgId);
       if (targetUserOrg?.role === 'owner') {
         const allUsers = await storage.getUsersByOrganization(orgId);
-        const owners = await Promise.all(
+        // Use Promise.allSettled to handle partial failures gracefully
+        const ownerResults = await Promise.allSettled(
           allUsers.map(async (u) => {
             const uo = await storage.getUserOrganization(u.id, orgId);
             return uo?.role === 'owner';
           })
         );
+        const owners = ownerResults
+          .filter((r): r is PromiseFulfilledResult<boolean> => r.status === 'fulfilled')
+          .map(r => r.value);
         if (owners.filter(Boolean).length === 1 && role !== 'owner') {
           return res.status(400).json({ message: "Cannot change role of the last owner" });
         }
@@ -356,12 +377,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const targetUserOrg = await storage.getUserOrganization(targetUserId, orgId);
       if (targetUserOrg?.role === 'owner') {
         const allUsers = await storage.getUsersByOrganization(orgId);
-        const owners = await Promise.all(
+        // Use Promise.allSettled to handle partial failures gracefully
+        const ownerResults = await Promise.allSettled(
           allUsers.map(async (u) => {
             const uo = await storage.getUserOrganization(u.id, orgId);
             return uo?.role === 'owner';
           })
         );
+        const owners = ownerResults
+          .filter((r): r is PromiseFulfilledResult<boolean> => r.status === 'fulfilled')
+          .map(r => r.value);
         if (owners.filter(Boolean).length === 1) {
           return res.status(400).json({ message: "Cannot remove the last owner" });
         }
@@ -596,7 +621,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newProject = await storage.duplicateProject(projectId, name, code);
       res.json(newProject);
     } catch (error) {
-      console.error("Error duplicating project:", error);
+      logger.error("Error duplicating project:", error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ message: "Failed to duplicate project" });
     }
   });
@@ -1182,13 +1207,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Refresh updated task after propagation to get computedDuration and endDate
           const refreshed = await storage.getTask(id);
           if (refreshed) {
-            console.log(`[DEBUG] Task ${id} refreshed after propagation - endDate: ${refreshed.endDate}, computedDuration: ${(refreshed as any).computedDuration}`);
+            logger.debug(`Task refreshed after propagation`, { taskId: id, endDate: refreshed.endDate, computedDuration: (refreshed as any).computedDuration });
             // Notify with refreshed data
             wsManager.notifyProjectUpdate(task.projectId, "task-updated", refreshed, userId);
             res.json(refreshed);
             return;
           } else {
-            console.error(`[DEBUG] Failed to refresh task ${id} after propagation`);
+            logger.error(`Failed to refresh task after propagation`, new Error("Task refresh failed"), { taskId: id });
           }
         } catch (propError) {
           console.error("Error propagating dates:", propError);
@@ -1198,11 +1223,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (estimatedHoursChanged && updated && !isCompleted && updated.startDate) {
         // Fallback: If propagation didn't run but estimatedHours changed and task has startDate, recalculate endDate
         try {
-          console.log(`[DEBUG] Fallback: Recalculating endDate for task ${id} after estimatedHours change`);
+          logger.debug(`Fallback: Recalculating endDate for task after estimatedHours change`, { taskId: id });
           const assignments = await storage.getResourceAssignmentsByTask(id);
-          const resources = await Promise.all(
+          // Use Promise.allSettled to handle partial failures gracefully
+          const resourceResults = await Promise.allSettled(
             assignments.map(a => storage.getResource(a.resourceId))
           );
+          const resources = resourceResults
+            .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getResource>>>> => 
+              r.status === 'fulfilled' && r.value !== null
+            )
+            .map(r => r.value);
           const assignmentsWithResources = assignments.map((a, idx) => ({
             ...a,
             resource: resources[idx]!,
@@ -1228,7 +1259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           if (refreshed) {
-            console.log(`[DEBUG] Task ${id} endDate recalculated - endDate: ${refreshed.endDate}, computedDuration: ${(refreshed as any).computedDuration}`);
+            logger.debug(`Task endDate recalculated`, { taskId: id, endDate: refreshed.endDate, computedDuration: (refreshed as any).computedDuration });
             wsManager.notifyProjectUpdate(task.projectId, "task-updated", refreshed, userId);
             res.json(refreshed);
             return;
@@ -1249,7 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taskId: id,
           previousValue: task.status,
           newValue: req.body.status,
-        }).catch(err => console.error("[NOTIFICATION] Error processing task status change:", err));
+        }).catch(err => logger.error("[NOTIFICATION] Error processing task status change", err instanceof Error ? err : new Error(String(err)), { eventType: "task-status-change", taskId: id, projectId: task.projectId }));
       }
       if (req.body.progress !== undefined && req.body.progress !== task.progress) {
         const { processEventBasedNotifications } = await import("./services/notificationService");
@@ -1258,7 +1289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taskId: id,
           previousValue: task.progress,
           newValue: req.body.progress,
-        }).catch(err => console.error("[NOTIFICATION] Error processing task progress milestone:", err));
+        }).catch(err => logger.error("[NOTIFICATION] Error processing task progress milestone", err instanceof Error ? err : new Error(String(err)), { eventType: "task-progress-milestone", taskId: id, projectId: task.projectId }));
       }
 
       res.json(updated);
@@ -1355,8 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Set content type explicitly
     res.setHeader('Content-Type', 'application/json');
     try {
-      console.log(`[DEBUG] Recalculate route hit: POST /api/tasks/${req.params.id}/recalculate`);
-      console.log(`[DEBUG] Request method: ${req.method}, URL: ${req.url}, Path: ${req.path}`);
+      logger.debug(`Recalculate route hit`, { method: req.method, url: req.url, path: req.path, taskId: req.params.id });
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
 
@@ -1537,8 +1567,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length < 2) {
         return res.status(404).json({ message: "At least 2 valid tasks required" });
@@ -1611,8 +1644,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length < 2) {
         return res.status(404).json({ message: "At least 2 valid tasks required" });
@@ -1682,8 +1718,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -1737,8 +1776,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -1757,8 +1799,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user names for assignedToName
-      const users = await Promise.all(userIds.map((id: string) => storage.getUser(id)));
-      const validUsers = users.filter(u => u !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const userResults = await Promise.allSettled(userIds.map((id: string) => storage.getUser(id)));
+      const validUsers = userResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getUser>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
       const userNames = validUsers.map(u => u!.name || u!.email?.split('@')[0] || 'Unknown').join(', ');
 
       // Store multiple user IDs as comma-separated string in assignedTo
@@ -1801,8 +1846,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -1821,8 +1869,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch and validate all resources belong to the same project
-      const resources = await Promise.all(resourceIds.map((id: number) => storage.getResource(id)));
-      const validResources = resources.filter(r => r !== null && r.projectId === projectId);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const resourceResults = await Promise.allSettled(resourceIds.map((id: number) => storage.getResource(id)));
+      const validResources = resourceResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getResource>>>> => 
+          r.status === 'fulfilled' && r.value !== null && r.value.projectId === projectId
+        )
+        .map(r => r.value);
 
       if (validResources.length === 0) {
         return res.status(400).json({ message: "No valid resources found for this project" });
@@ -1878,8 +1931,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -1898,8 +1954,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch and validate all risks belong to the same project
-      const risks = await Promise.all(riskIds.map((id: number) => storage.getRisk(id)));
-      const validRisks = risks.filter(r => r !== null && r.projectId === projectId);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const riskResults = await Promise.allSettled(riskIds.map((id: number) => storage.getRisk(id)));
+      const validRisks = riskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getRisk>>>> => 
+          r.status === 'fulfilled' && r.value !== null && r.value.projectId === projectId
+        )
+        .map(r => r.value);
 
       if (validRisks.length === 0) {
         return res.status(400).json({ message: "No valid risks found for this project" });
@@ -1940,8 +2001,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -1960,8 +2024,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch and validate all issues belong to the same project
-      const issues = await Promise.all(issueIds.map((id: number) => storage.getIssue(id)));
-      const validIssues = issues.filter(i => i !== null && i.projectId === projectId);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const issueResults = await Promise.allSettled(issueIds.map((id: number) => storage.getIssue(id)));
+      const validIssues = issueResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getIssue>>>> => 
+          r.status === 'fulfilled' && r.value !== null && r.value.projectId === projectId
+        )
+        .map(r => r.value);
 
       if (validIssues.length === 0) {
         return res.status(400).json({ message: "No valid issues found for this project" });
@@ -2002,8 +2071,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -2049,8 +2121,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all tasks and verify they exist and belong to the same project
-      const tasks = await Promise.all(taskIds.map((id: number) => storage.getTask(id)));
-      const validTasks = tasks.filter(t => t !== null);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const taskResults = await Promise.allSettled(taskIds.map((id: number) => storage.getTask(id)));
+      const validTasks = taskResults
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof storage.getTask>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
       if (validTasks.length === 0) {
         return res.status(404).json({ message: "No valid tasks found" });
@@ -2080,7 +2155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, deleted: deletedCount });
     } catch (error) {
-      console.error("Error bulk deleting tasks:", error);
+      logger.error("Error bulk deleting tasks:", error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ message: "Failed to delete tasks" });
     }
   });
@@ -2686,7 +2761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       processEventBasedNotifications("risk-created", {
         projectId: risk.projectId,
         riskId: risk.id,
-      }).catch(err => console.error("[NOTIFICATION] Error processing risk created:", err));
+      }).catch(err => logger.error("[NOTIFICATION] Error processing risk created", err instanceof Error ? err : new Error(String(err)), { eventType: "risk-created", riskId: risk.id, projectId: risk.projectId }));
 
       res.json(risk);
     } catch (error) {
@@ -2737,7 +2812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           riskId: id,
           previousValue: existing.impact,
           newValue: req.body.impact,
-        }).catch(err => console.error("[NOTIFICATION] Error processing risk impact change:", err));
+        }).catch(err => logger.error("[NOTIFICATION] Error processing risk impact change", err instanceof Error ? err : new Error(String(err)), { eventType: "risk-impact-changed", riskId: id, projectId: existing.projectId }));
       }
 
       res.json(updated);
@@ -2824,7 +2899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       processEventBasedNotifications("issue-created", {
         projectId: issue.projectId,
         issueId: issue.id,
-      }).catch(err => console.error("[NOTIFICATION] Error processing issue created:", err));
+      }).catch(err => logger.error("[NOTIFICATION] Error processing issue created", err instanceof Error ? err : new Error(String(err)), { eventType: "issue-created", issueId: issue.id, projectId: issue.projectId }));
 
       res.json(issue);
     } catch (error) {
@@ -2876,7 +2951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           issueId: id,
           previousValue: existing.status,
           newValue: "resolved",
-        }).catch(err => console.error("[NOTIFICATION] Error processing issue resolved:", err));
+        }).catch(err => logger.error("[NOTIFICATION] Error processing issue resolved", err instanceof Error ? err : new Error(String(err)), { eventType: "issue-resolved", issueId: id, projectId: existing.projectId }));
       }
 
       res.json(updated);
@@ -3055,8 +3130,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 organizationId: project.organizationId,
               });
             }
-          } catch (error) {
-            console.error("Error sending change request status notification:", error);
+          } catch (error: any) {
+            logger.error("Error sending change request status notification", error instanceof Error ? error : new Error(String(error)), { changeRequestId: id, projectId: existing.projectId, status: updated.status });
           }
         })();
       }
@@ -8921,7 +8996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payload: { messageId, userId, emoji, added: result.added },
         timestamp: Date.now(),
         userId,
-      }).catch(() => {});
+      }).catch(err => logger.error("Error broadcasting message reaction", err instanceof Error ? err : new Error(String(err)), { conversationId: messages[0].conversationId, messageId, userId }));
 
       res.json(result);
     } catch (error: any) {
@@ -8953,11 +9028,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payload: { messageId, userId, emoji, added: false },
         timestamp: Date.now(),
         userId,
-      }).catch(() => {});
+      }).catch(err => logger.error("Error broadcasting message reaction removal", err instanceof Error ? err : new Error(String(err)), { conversationId: messages[0].conversationId, messageId, userId }));
 
       res.json({ success: true });
     } catch (error: any) {
-      console.error("Error removing reaction:", error);
+      logger.error("Error removing reaction", error instanceof Error ? error : new Error(String(error)), { userId, messageId, emoji });
       res.status(500).json({ message: error.message || "Failed to remove reaction" });
     }
   });
@@ -8984,19 +9059,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Generate file path (in production, save to S3/Cloudinary)
-      const filePath = `/uploads/chat/${conversationId}/${Date.now()}-${fileName}`;
+      // Security: Validate file type
+      const ALLOWED_MIME_TYPES = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain', 'text/csv',
+        'application/zip', 'application/x-zip-compressed'
+      ];
+      
+      if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {
+        return res.status(400).json({ 
+          message: `File type not allowed. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}` 
+        });
+      }
+      
+      // Security: Validate file size (10MB max)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      const fileSizeNum = parseInt(fileSize);
+      if (isNaN(fileSizeNum) || fileSizeNum > MAX_FILE_SIZE) {
+        return res.status(400).json({ 
+          message: `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB` 
+        });
+      }
+      
+      if (fileSizeNum <= 0) {
+        return res.status(400).json({ message: "Invalid file size" });
+      }
+      
+      // Security: Sanitize filename and generate secure path
+      const sanitizedFileName = fileName
+        .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace dangerous characters
+        .substring(0, 255); // Limit length
+      
+      const fileExtension = sanitizedFileName.split('.').pop() || '';
+      const secureFileName = `${crypto.randomUUID()}.${fileExtension}`;
+      const filePath = `/uploads/chat/${conversationId}/${secureFileName}`;
       
       // TODO: Save file to storage (S3, local filesystem, etc.)
-      // For now, return mock path
+      // For now, return secure path
       res.json({
         filePath,
-        fileName,
-        fileSize: parseInt(fileSize),
+        fileName: sanitizedFileName,
+        fileSize: fileSizeNum,
         mimeType,
       });
     } catch (error: any) {
-      console.error("Error uploading file:", error);
+      logger.error("Error uploading file", error instanceof Error ? error : new Error(String(error)), { userId, conversationId });
       res.status(500).json({ message: error.message || "Failed to upload file" });
     }
   });

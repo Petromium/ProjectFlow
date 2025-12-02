@@ -3,6 +3,9 @@ import { log } from "./app";
 import { storage } from "./storage";
 import type { NotificationRule, Task, Project } from "@shared/schema";
 
+// Track all timers for cleanup on shutdown
+const activeTimers: NodeJS.Timeout[] = [];
+
 /**
  * Calculate time until next 17:00 CET (Central European Time)
  * ECB updates rates around 16:00 CET, so we sync at 17:00 to ensure we get the latest
@@ -46,7 +49,7 @@ function scheduleDailySync(): void {
   
   log(`Exchange rate sync scheduled in ${hoursUntilSync.toFixed(2)} hours (17:00 CET daily)`);
   
-  setTimeout(async () => {
+  const timer = setTimeout(async () => {
     log("Starting scheduled exchange rate sync...");
     
     try {
@@ -64,6 +67,8 @@ function scheduleDailySync(): void {
     // Schedule next sync (24 hours from now)
     scheduleDailySync();
   }, msUntilSync);
+  
+  activeTimers.push(timer);
 }
 
 /**
@@ -78,7 +83,7 @@ export function initializeScheduler(): void {
   
   if (runOnStartup) {
     // Run sync after a short delay to allow server to fully start
-    setTimeout(async () => {
+    const startupTimer = setTimeout(async () => {
       log("Running initial exchange rate sync...");
       try {
         const result = await syncExchangeRates();
@@ -91,6 +96,8 @@ export function initializeScheduler(): void {
         log(`Initial sync error: ${error.message}`, "error");
       }
     }, 5000); // 5 second delay
+    
+    activeTimers.push(startupTimer);
   }
   
   // Schedule daily syncs
@@ -337,10 +344,25 @@ function scheduleNotificationChecks(): void {
   // Run immediately, then every hour
   checkNotificationRules();
   
-  setInterval(() => {
+  const intervalTimer = setInterval(() => {
     checkNotificationRules();
   }, 60 * 60 * 1000); // 1 hour
+  
+  activeTimers.push(intervalTimer);
 
   log("[SCHEDULER] Notification rule checks scheduled (every hour)");
+}
+
+/**
+ * Cleanup all active timers (call on server shutdown)
+ */
+export function cleanupScheduler(): void {
+  log("[SCHEDULER] Cleaning up active timers...");
+  activeTimers.forEach(timer => {
+    clearTimeout(timer);
+    clearInterval(timer);
+  });
+  activeTimers.length = 0;
+  log("[SCHEDULER] All timers cleaned up");
 }
 

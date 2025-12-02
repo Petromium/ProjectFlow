@@ -4,7 +4,7 @@
  */
 
 import { db, pool } from "../db";
-import { logger } from "../services/cloudLogging";
+import { logger } from "./logger";
 
 /**
  * Execute a function within a database transaction

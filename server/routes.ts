@@ -9088,6 +9088,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid file size" });
       }
       
+      // Security: Validate fileName before sanitization
+      if (!fileName || typeof fileName !== 'string' || fileName.trim().length === 0) {
+        return res.status(400).json({ message: "fileName is required and must be a non-empty string" });
+      }
+      
       // Security: Sanitize filename and generate secure path
       const sanitizedFileName = fileName
         .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace dangerous characters

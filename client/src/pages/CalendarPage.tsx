@@ -2,12 +2,15 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, Calendar, CheckSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useProject } from "@/contexts/ProjectContext";
 import { TaskModal } from "@/components/TaskModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Task } from "@shared/schema";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -35,6 +38,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<Task | undefined>();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [showActualDates, setShowActualDates] = useState(true);
+  const [showBaselineDates, setShowBaselineDates] = useState(true);
 
   const { 
     data: tasks = [], 
@@ -65,29 +70,65 @@ export default function CalendarPage() {
     const taskMap: Map<number, Task[]> = new Map();
     
     tasks.forEach(task => {
-      if (task.startDate) {
-        const startDate = new Date(task.startDate);
-        if (startDate.getFullYear() === year && startDate.getMonth() === month) {
-          const day = startDate.getDate();
-          if (!taskMap.has(day)) taskMap.set(day, []);
-          taskMap.get(day)!.push({ ...task, _isStart: true } as any);
-        }
+      // Determine which dates to use based on toggle settings
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+      let dateType: "actual" | "baseline" | "both" = "actual";
+
+      if (showActualDates && showBaselineDates) {
+        // Show both - prefer actual if available, fallback to baseline
+        startDate = (task as any).actualStartDate ? new Date((task as any).actualStartDate) : 
+                   (task as any).baselineStart ? new Date((task as any).baselineStart) : 
+                   task.startDate ? new Date(task.startDate) : null;
+        endDate = (task as any).actualFinishDate ? new Date((task as any).actualFinishDate) : 
+                 (task as any).baselineFinish ? new Date((task as any).baselineFinish) : 
+                 task.endDate ? new Date(task.endDate) : null;
+        dateType = "both";
+      } else if (showActualDates) {
+        startDate = (task as any).actualStartDate ? new Date((task as any).actualStartDate) : null;
+        endDate = (task as any).actualFinishDate ? new Date((task as any).actualFinishDate) : null;
+        dateType = "actual";
+      } else if (showBaselineDates) {
+        startDate = (task as any).baselineStart ? new Date((task as any).baselineStart) : null;
+        endDate = (task as any).baselineFinish ? new Date((task as any).baselineFinish) : null;
+        dateType = "baseline";
+      } else {
+        // Fallback to planned dates if neither is selected
+        startDate = task.startDate ? new Date(task.startDate) : null;
+        endDate = task.endDate ? new Date(task.endDate) : null;
       }
-      if (task.endDate) {
-        const endDate = new Date(task.endDate);
-        if (endDate.getFullYear() === year && endDate.getMonth() === month) {
-          const day = endDate.getDate();
-          if (!taskMap.has(day)) taskMap.set(day, []);
-          const existing = taskMap.get(day)!.find(t => t.id === task.id);
+
+      if (!startDate || !endDate) return;
+
+      // Normalize dates to start of day for comparison
+      const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+
+      // Find intersection of task date range with current month
+      const rangeStart = start > monthStart ? start : monthStart;
+      const rangeEnd = end < monthEnd ? end : monthEnd;
+
+      if (rangeStart <= rangeEnd) {
+        // Add task to all days it spans in this month
+        for (let d = rangeStart.getDate(); d <= rangeEnd.getDate(); d++) {
+          if (!taskMap.has(d)) taskMap.set(d, []);
+          const dayTasks = taskMap.get(d)!;
+          
+          // Check if task already added to this day
+          const existing = dayTasks.find(t => t.id === task.id);
           if (!existing) {
-            taskMap.get(day)!.push({ ...task, _isEnd: true } as any);
+            const isStart = d === start.getDate() && start.getMonth() === month && start.getFullYear() === year;
+            const isEnd = d === end.getDate() && end.getMonth() === month && end.getFullYear() === year;
+            dayTasks.push({ ...task, _isStart: isStart, _isEnd: isEnd, _dateType: dateType } as any);
           }
         }
       }
     });
     
     return taskMap;
-  }, [tasks, year, month]);
+  }, [tasks, year, month, showActualDates, showBaselineDates]);
 
   const upcomingTasks = useMemo(() => {
     const now = new Date();
@@ -153,22 +194,45 @@ export default function CalendarPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-semibold" data-testid="page-title-calendar">Calendar</h1>
           <p className="text-muted-foreground">Project timeline and milestones</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
-            Today
-          </Button>
-          <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="px-4 font-semibold min-w-[180px] text-center">{monthName}</div>
-          <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 border rounded-lg p-2">
+            <Label className="text-sm font-medium">Date Types:</Label>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-actual"
+                  checked={showActualDates}
+                  onCheckedChange={setShowActualDates}
+                />
+                <Label htmlFor="show-actual" className="text-sm cursor-pointer">Actual</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-baseline"
+                  checked={showBaselineDates}
+                  onCheckedChange={setShowBaselineDates}
+                />
+                <Label htmlFor="show-baseline" className="text-sm cursor-pointer">Baseline</Label>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
+              Today
+            </Button>
+            <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="px-4 font-semibold min-w-[180px] text-center">{monthName}</div>
+            <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -214,21 +278,30 @@ export default function CalendarPage() {
                         {dayNumber}
                       </div>
                       <div className="space-y-1">
-                        {dayTasks.slice(0, 3).map((task: any) => (
-                          <div
-                            key={`${task.id}-${task._isStart ? 'start' : 'end'}`}
-                            className={cn(
-                              "text-xs px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-80",
-                              getStatusColor(task.status),
-                              getPriorityBorder(task.priority)
-                            )}
-                            title={`${task.name} (${task._isStart ? 'Start' : 'Due'})`}
-                            onClick={() => handleTaskClick(task)}
-                            data-testid={`calendar-task-${task.id}`}
-                          >
-                            {task._isStart ? "▶ " : "◼ "}{task.name}
-                          </div>
-                        ))}
+                        {dayTasks.slice(0, 3).map((task: any) => {
+                          const isStart = task._isStart;
+                          const isEnd = task._isEnd;
+                          const isOngoing = !isStart && !isEnd;
+                          const dateTypeLabel = task._dateType === "actual" ? "A" : task._dateType === "baseline" ? "B" : "";
+                          
+                          return (
+                            <div
+                              key={`${task.id}-${dayNumber}`}
+                              className={cn(
+                                "text-xs px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-80 flex items-center gap-1",
+                                getStatusColor(task.status),
+                                getPriorityBorder(task.priority)
+                              )}
+                              title={`${task.name}${isStart ? ' (Start)' : isEnd ? ' (End)' : ' (Ongoing)'}${dateTypeLabel ? ` [${dateTypeLabel}]` : ''}`}
+                              onClick={() => handleTaskClick(task)}
+                              data-testid={`calendar-task-${task.id}`}
+                            >
+                              {isStart ? "▶ " : isEnd ? "◼ " : "▸ "}
+                              {task.name}
+                              {dateTypeLabel && <span className="text-[10px] opacity-75">[{dateTypeLabel}]</span>}
+                            </div>
+                          );
+                        })}
                         {dayTasks.length > 3 && (
                           <div className="text-xs text-muted-foreground">
                             +{dayTasks.length - 3} more

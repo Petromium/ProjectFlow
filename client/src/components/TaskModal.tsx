@@ -31,6 +31,7 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 import { useTaskConversation, useCreateConversation } from "@/hooks/useConversations";
 import { useAuth } from "@/hooks/useAuth";
 import { MessageSquare } from "lucide-react";
+import { TaskRaciTab } from "@/components/TaskRaciTab";
 
 type TaskStatus = "not-started" | "in-progress" | "review" | "completed" | "on-hold";
 type TaskPriority = "low" | "medium" | "high" | "critical";
@@ -935,6 +936,12 @@ export function TaskModal({
                 Schedule
               </TabsTrigger>
               <TabsTrigger 
+                value="raci" 
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
+              >
+                RACI
+              </TabsTrigger>
+              <TabsTrigger 
                 value="dependencies" 
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
               >
@@ -1395,6 +1402,23 @@ export function TaskModal({
                   </div>
                 </div>
               </div>
+            </TabsContent>
+
+            <TabsContent value="raci" className="space-y-4 mt-0">
+              {task && selectedProjectId ? (
+                <TaskRaciTab 
+                  taskId={task.id} 
+                  projectId={selectedProjectId} 
+                  hasParent={!!task.parentId} 
+                />
+              ) : (
+                <div className="flex items-center justify-center h-40 text-muted-foreground">
+                  <div className="text-center">
+                    <p className="text-sm font-medium mb-1">RACI Matrix</p>
+                    <p className="text-xs">Please save the task first to manage RACI assignments.</p>
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="dependencies" className="space-y-4 mt-0">

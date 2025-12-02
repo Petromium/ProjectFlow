@@ -41,6 +41,11 @@ import type {
   ExchangeRate,
   InsertExchangeRateSync,
   ExchangeRateSync,
+  InsertNotificationRule,
+  NotificationRule,
+  UpdateNotificationRule,
+  InsertNotificationLog,
+  NotificationLog,
   InsertCostItem,
   CostItem,
   InsertCostBreakdownStructure,
@@ -233,6 +238,22 @@ export interface IStorage {
   deleteInheritedRaciByTask(taskId: number): Promise<void>;
   getInheritedRaciBySourceTask(sourceTaskId: number): Promise<StakeholderRaci[]>;
   upsertStakeholderRaci(raci: InsertStakeholderRaci): Promise<StakeholderRaci>;
+
+  // Notification Rules
+  getNotificationRule(id: number): Promise<NotificationRule | undefined>;
+  getNotificationRulesByProject(projectId: number): Promise<NotificationRule[]>;
+  getNotificationRulesByOrganization(organizationId: number): Promise<NotificationRule[]>;
+  getActiveNotificationRules(): Promise<NotificationRule[]>;
+  createNotificationRule(rule: InsertNotificationRule): Promise<NotificationRule>;
+  updateNotificationRule(id: number, rule: UpdateNotificationRule): Promise<NotificationRule | undefined>;
+  deleteNotificationRule(id: number): Promise<void>;
+
+  // Notification Logs
+  getNotificationLog(id: number): Promise<NotificationLog | undefined>;
+  getNotificationLogsByRule(ruleId: number): Promise<NotificationLog[]>;
+  getNotificationLogsByProject(projectId: number): Promise<NotificationLog[]>;
+  createNotificationLog(log: InsertNotificationLog): Promise<NotificationLog>;
+  updateNotificationLog(id: number, log: Partial<InsertNotificationLog>): Promise<NotificationLog | undefined>;
 
   // Risks
   getRisk(id: number): Promise<Risk | undefined>;
@@ -1261,6 +1282,81 @@ export class DatabaseStorage implements IStorage {
   async getInheritedRaciBySourceTask(sourceTaskId: number): Promise<StakeholderRaci[]> {
     return await db.select().from(schema.stakeholderRaci)
       .where(eq(schema.stakeholderRaci.inheritedFromTaskId, sourceTaskId));
+  }
+
+  // Notification Rules
+  async getNotificationRule(id: number): Promise<NotificationRule | undefined> {
+    const [rule] = await db.select().from(schema.notificationRules)
+      .where(eq(schema.notificationRules.id, id));
+    return rule;
+  }
+
+  async getNotificationRulesByProject(projectId: number): Promise<NotificationRule[]> {
+    return await db.select().from(schema.notificationRules)
+      .where(eq(schema.notificationRules.projectId, projectId))
+      .orderBy(desc(schema.notificationRules.createdAt));
+  }
+
+  async getNotificationRulesByOrganization(organizationId: number): Promise<NotificationRule[]> {
+    return await db.select().from(schema.notificationRules)
+      .where(eq(schema.notificationRules.organizationId, organizationId))
+      .orderBy(desc(schema.notificationRules.createdAt));
+  }
+
+  async getActiveNotificationRules(): Promise<NotificationRule[]> {
+    return await db.select().from(schema.notificationRules)
+      .where(eq(schema.notificationRules.isActive, true))
+      .orderBy(desc(schema.notificationRules.createdAt));
+  }
+
+  async createNotificationRule(rule: InsertNotificationRule): Promise<NotificationRule> {
+    const [created] = await db.insert(schema.notificationRules).values(rule).returning();
+    return created;
+  }
+
+  async updateNotificationRule(id: number, rule: UpdateNotificationRule): Promise<NotificationRule | undefined> {
+    const [updated] = await db.update(schema.notificationRules)
+      .set({ ...rule, updatedAt: new Date() })
+      .where(eq(schema.notificationRules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteNotificationRule(id: number): Promise<void> {
+    await db.delete(schema.notificationRules)
+      .where(eq(schema.notificationRules.id, id));
+  }
+
+  // Notification Logs
+  async getNotificationLog(id: number): Promise<NotificationLog | undefined> {
+    const [log] = await db.select().from(schema.notificationLogs)
+      .where(eq(schema.notificationLogs.id, id));
+    return log;
+  }
+
+  async getNotificationLogsByRule(ruleId: number): Promise<NotificationLog[]> {
+    return await db.select().from(schema.notificationLogs)
+      .where(eq(schema.notificationLogs.ruleId, ruleId))
+      .orderBy(desc(schema.notificationLogs.createdAt));
+  }
+
+  async getNotificationLogsByProject(projectId: number): Promise<NotificationLog[]> {
+    return await db.select().from(schema.notificationLogs)
+      .where(eq(schema.notificationLogs.projectId, projectId))
+      .orderBy(desc(schema.notificationLogs.createdAt));
+  }
+
+  async createNotificationLog(log: InsertNotificationLog): Promise<NotificationLog> {
+    const [created] = await db.insert(schema.notificationLogs).values(log).returning();
+    return created;
+  }
+
+  async updateNotificationLog(id: number, log: Partial<InsertNotificationLog>): Promise<NotificationLog | undefined> {
+    const [updated] = await db.update(schema.notificationLogs)
+      .set(log)
+      .where(eq(schema.notificationLogs.id, id))
+      .returning();
+    return updated;
   }
 
   async getTaskDescendants(taskId: number): Promise<Task[]> {

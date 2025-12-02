@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Cloud, HardDrive, RefreshCw, Unlink, Check, AlertCircle, Clock, Loader2, ExternalLink, FolderSync, Sparkles, Mail, Users, FolderKanban, CreditCard, Tags, Replace, Search, UserPlus, MoreVertical, Pencil, Trash2, Plus, Eye, Send, Copy, Code, X } from "lucide-react";
+import { Cloud, HardDrive, RefreshCw, Unlink, Check, AlertCircle, Clock, Loader2, ExternalLink, FolderSync, Sparkles, Mail, Users, FolderKanban, CreditCard, Tags, Replace, Search, UserPlus, MoreVertical, Pencil, Trash2, Plus, Eye, Send, Copy, Code, X, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -44,6 +44,7 @@ import { Progress } from "@/components/ui/progress";
 import { format, formatDistanceToNow } from "date-fns";
 import type { User, UserInvitation, EmailTemplate } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { NotificationRulesSection } from "@/components/NotificationRulesSection";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -1435,7 +1436,7 @@ export default function SettingsPage() {
   // Set active tab from URL query parameter
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam && ["usage", "cloud-storage", "storage", "users", "labels"].includes(tabParam)) {
+    if (tabParam && ["usage", "cloud-storage", "storage", "users", "labels", "email-templates", "automation"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -1617,6 +1618,10 @@ export default function SettingsPage() {
           <TabsTrigger value="email-templates" data-testid="tab-email-templates">
             <Mail className="h-4 w-4 mr-2" />
             Email Templates
+          </TabsTrigger>
+          <TabsTrigger value="automation" data-testid="tab-automation">
+            <Bell className="h-4 w-4 mr-2" />
+            Automation
           </TabsTrigger>
         </TabsList>
 
@@ -2030,6 +2035,10 @@ export default function SettingsPage() {
 
         <TabsContent value="email-templates" className="space-y-4">
           <EmailTemplatesSection />
+        </TabsContent>
+
+        <TabsContent value="automation" className="space-y-4">
+          <NotificationRulesSection />
         </TabsContent>
       </Tabs>
 

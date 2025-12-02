@@ -342,11 +342,18 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
       }
     };
 
-    // Helper to convert string to number or null
+    // Helper to convert string to number or null (for integer fields)
     const normalizeNumber = (value: string | number | null | undefined): number | null => {
       if (value === null || value === undefined || value === '') return null;
       const num = typeof value === 'string' ? parseFloat(value) : value;
       return isNaN(num) ? null : num;
+    };
+
+    // Helper to convert to string for decimal fields (Zod expects strings for decimal types)
+    const normalizeDecimal = (value: string | number | null | undefined): string | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const num = typeof value === 'string' ? parseFloat(value) : value;
+      return isNaN(num) ? null : String(num);
     };
 
     const data: any = {
@@ -355,7 +362,7 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
       discipline: formData.discipline,
       availability: formData.availability,
       availabilityStatus: formData.availabilityStatus,
-      rate: normalizeNumber(formData.rate),
+      rate: normalizeDecimal(formData.rate),
       rateType: formData.rateType,
       unitType: formData.unitType,
       currency: formData.currency,
@@ -370,8 +377,8 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
       contractReference: formData.contractReference?.trim() || null,
       maxHoursPerDay: formData.maxHoursPerDay || null,
       maxHoursPerWeek: formData.maxHoursPerWeek || null,
-      efficiencyRating: normalizeNumber(formData.efficiencyRating) || null,
-      productivityFactor: normalizeNumber(formData.productivityFactor) || null,
+      efficiencyRating: normalizeDecimal(formData.efficiencyRating),
+      productivityFactor: normalizeDecimal(formData.productivityFactor),
       qualityScore: formData.qualityScore ? parseInt(formData.qualityScore) : null,
       skillsArray: skills.length > 0 ? skills : null,
       skills: skills.length > 0 ? skills.join(", ") : null,

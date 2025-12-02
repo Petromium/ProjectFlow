@@ -15,6 +15,9 @@ import {
   insertStakeholderSchema,
   insertStakeholderRaciSchema,
   updateStakeholderRaciSchema,
+  insertNotificationRuleSchema,
+  updateNotificationRuleSchema,
+  insertNotificationLogSchema,
   insertRiskSchema,
   insertIssueSchema,
   insertChangeRequestSchema,
@@ -1226,6 +1229,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify connected clients
       wsManager.notifyProjectUpdate(task.projectId, "task-updated", updated, userId);
 
+      // Process event-based notifications
+      if (req.body.status !== undefined && req.body.status !== task.status) {
+        const { processEventBasedNotifications } = await import("./services/notificationService");
+        processEventBasedNotifications("task-status-change", {
+          projectId: task.projectId,
+          taskId: id,
+          previousValue: task.status,
+          newValue: req.body.status,
+        }).catch(err => console.error("[NOTIFICATION] Error processing task status change:", err));
+      }
+      if (req.body.progress !== undefined && req.body.progress !== task.progress) {
+        const { processEventBasedNotifications } = await import("./services/notificationService");
+        processEventBasedNotifications("task-progress-milestone", {
+          projectId: task.projectId,
+          taskId: id,
+          previousValue: task.progress,
+          newValue: req.body.progress,
+        }).catch(err => console.error("[NOTIFICATION] Error processing task progress milestone:", err));
+      }
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -2419,6 +2442,192 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== Notification Rules Routes =====
+  app.get('/api/projects/:projectId/notification-rules', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+
+      // Check access
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const rules = await storage.getNotificationRulesByProject(projectId);
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching notification rules:", error);
+      res.status(500).json({ message: "Failed to fetch notification rules" });
+    }
+  });
+
+  app.get('/api/organizations/:organizationId/notification-rules', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const organizationId = parseInt(req.params.organizationId);
+
+      // Check access
+      if (!await checkOrganizationAccess(userId, organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const rules = await storage.getNotificationRulesByOrganization(organizationId);
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching notification rules:", error);
+      res.status(500).json({ message: "Failed to fetch notification rules" });
+    }
+  });
+
+  app.get('/api/notification-rules/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+
+      const rule = await storage.getNotificationRule(id);
+      if (!rule) {
+        return res.status(404).json({ message: "Notification rule not found" });
+      }
+
+      // Check access based on project or organization
+      if (rule.projectId && !await checkProjectAccess(userId, rule.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (rule.organizationId && !await checkOrganizationAccess(userId, rule.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      res.json(rule);
+    } catch (error) {
+      console.error("Error fetching notification rule:", error);
+      res.status(500).json({ message: "Failed to fetch notification rule" });
+    }
+  });
+
+  app.post('/api/notification-rules', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const data = insertNotificationRuleSchema.parse(req.body);
+
+      // Check access based on project or organization
+      if (data.projectId && !await checkProjectAccess(userId, data.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (data.organizationId && !await checkOrganizationAccess(userId, data.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const rule = await storage.createNotificationRule({
+        ...data,
+        createdBy: userId,
+      });
+
+      res.status(201).json(rule);
+    } catch (error) {
+      console.error("Error creating notification rule:", error);
+      res.status(500).json({ message: "Failed to create notification rule" });
+    }
+  });
+
+  app.patch('/api/notification-rules/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+
+      const existingRule = await storage.getNotificationRule(id);
+      if (!existingRule) {
+        return res.status(404).json({ message: "Notification rule not found" });
+      }
+
+      // Check access
+      if (existingRule.projectId && !await checkProjectAccess(userId, existingRule.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (existingRule.organizationId && !await checkOrganizationAccess(userId, existingRule.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const data = updateNotificationRuleSchema.parse(req.body);
+      const updated = await storage.updateNotificationRule(id, data);
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating notification rule:", error);
+      res.status(500).json({ message: "Failed to update notification rule" });
+    }
+  });
+
+  app.delete('/api/notification-rules/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+
+      const rule = await storage.getNotificationRule(id);
+      if (!rule) {
+        return res.status(404).json({ message: "Notification rule not found" });
+      }
+
+      // Check access
+      if (rule.projectId && !await checkProjectAccess(userId, rule.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (rule.organizationId && !await checkOrganizationAccess(userId, rule.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      await storage.deleteNotificationRule(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting notification rule:", error);
+      res.status(500).json({ message: "Failed to delete notification rule" });
+    }
+  });
+
+  // Notification Logs Routes
+  app.get('/api/notification-rules/:ruleId/logs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const ruleId = parseInt(req.params.ruleId);
+
+      const rule = await storage.getNotificationRule(ruleId);
+      if (!rule) {
+        return res.status(404).json({ message: "Notification rule not found" });
+      }
+
+      // Check access
+      if (rule.projectId && !await checkProjectAccess(userId, rule.projectId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (rule.organizationId && !await checkOrganizationAccess(userId, rule.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const logs = await storage.getNotificationLogsByRule(ruleId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching notification logs:", error);
+      res.status(500).json({ message: "Failed to fetch notification logs" });
+    }
+  });
+
+  app.get('/api/projects/:projectId/notification-logs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+
+      // Check access
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const logs = await storage.getNotificationLogsByProject(projectId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching notification logs:", error);
+      res.status(500).json({ message: "Failed to fetch notification logs" });
+    }
+  });
+
   // ===== Risk Routes =====
   app.get('/api/projects/:projectId/risks', isAuthenticated, async (req: any, res) => {
     try {
@@ -2460,6 +2669,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify connected clients
       wsManager.notifyProjectUpdate(risk.projectId, "risk-created", risk, userId);
 
+      // Process event-based notifications
+      const { processEventBasedNotifications } = await import("./services/notificationService");
+      processEventBasedNotifications("risk-created", {
+        projectId: risk.projectId,
+        riskId: risk.id,
+      }).catch(err => console.error("[NOTIFICATION] Error processing risk created:", err));
+
       res.json(risk);
     } catch (error) {
       console.error("Error creating risk:", error);
@@ -2500,6 +2716,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Notify connected clients
       wsManager.notifyProjectUpdate(existing.projectId, "risk-updated", updated, userId);
+
+      // Process event-based notifications
+      if (req.body.impact !== undefined && req.body.impact !== existing.impact) {
+        const { processEventBasedNotifications } = await import("./services/notificationService");
+        processEventBasedNotifications("risk-impact-changed", {
+          projectId: existing.projectId,
+          riskId: id,
+          previousValue: existing.impact,
+          newValue: req.body.impact,
+        }).catch(err => console.error("[NOTIFICATION] Error processing risk impact change:", err));
+      }
 
       res.json(updated);
     } catch (error) {
@@ -2580,6 +2807,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Notify connected clients
       wsManager.notifyProjectUpdate(issue.projectId, "issue-created", issue, userId);
 
+      // Process event-based notifications
+      const { processEventBasedNotifications } = await import("./services/notificationService");
+      processEventBasedNotifications("issue-created", {
+        projectId: issue.projectId,
+        issueId: issue.id,
+      }).catch(err => console.error("[NOTIFICATION] Error processing issue created:", err));
+
       res.json(issue);
     } catch (error) {
       console.error("Error creating issue:", error);
@@ -2621,6 +2855,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Notify connected clients
       wsManager.notifyProjectUpdate(existing.projectId, "issue-updated", updated, userId);
+
+      // Process event-based notifications
+      if (req.body.status !== undefined && req.body.status === "resolved" && existing.status !== "resolved") {
+        const { processEventBasedNotifications } = await import("./services/notificationService");
+        processEventBasedNotifications("issue-resolved", {
+          projectId: existing.projectId,
+          issueId: id,
+          previousValue: existing.status,
+          newValue: "resolved",
+        }).catch(err => console.error("[NOTIFICATION] Error processing issue resolved:", err));
+      }
 
       res.json(updated);
     } catch (error) {
@@ -4366,6 +4611,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         createdBy: userId,
       });
+
+      // Process event-based notifications for calendar events
+      const { processEventBasedNotifications } = await import("./services/notificationService");
+      processEventBasedNotifications("calendar-event-created", {
+        projectId: event.projectId,
+        calendarEventId: event.id,
+      }).catch(err => console.error("[NOTIFICATION] Error processing calendar event created:", err));
+
       res.json(event);
     } catch (error) {
       console.error("Error creating event:", error);

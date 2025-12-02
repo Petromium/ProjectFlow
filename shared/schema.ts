@@ -944,6 +944,160 @@ export const projectEvents = pgTable("project_events", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ==================== Communication & Notification System ====================
+
+// Notification Trigger Types
+export const notificationTriggerTypeEnum = pgEnum("notification_trigger_type", [
+  "time-based",      // Relative to dates (e.g., "7 days before baseline start")
+  "event-based",     // State changes (e.g., "Task Status → Completed")
+  "threshold-based", // Variance monitoring (e.g., "Cost > Baseline + 10%")
+  "custom-date"      // Specific calendar date
+]);
+
+// Notification Frequency
+export const notificationFrequencyEnum = pgEnum("notification_frequency", [
+  "one-time",   // Send once when trigger fires
+  "daily",      // Send daily until condition met
+  "weekly",     // Send weekly
+  "monthly"     // Send monthly
+]);
+
+// Notification Scope
+export const notificationScopeTypeEnum = pgEnum("notification_scope_type", [
+  "all-tasks",        // Applies to all tasks in project
+  "specific-tasks",   // Applies to selected tasks
+  "project-level",    // Project-wide notifications
+  "calendar-event"    // Calendar event notifications
+]);
+
+// Notification Recipient Type
+export const notificationRecipientTypeEnum = pgEnum("notification_recipient_type", [
+  "individual",   // Specific people (stakeholders/resources/contacts)
+  "role-based",   // All people with specific role
+  "raci-based",    // RACI assignments (e.g., "Accountable for Task X")
+  "group"         // Custom groups (future feature)
+]);
+
+// Notification Rules (defines when and who to notify)
+export const notificationRules = pgTable("notification_rules", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  organizationId: integer("organization_id").references(() => organizations.id, { onDelete: "cascade" }), // For PMO-level rules
+  
+  // Basic Info
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  
+  // Trigger Configuration (JSONB for flexibility)
+  triggerType: notificationTriggerTypeEnum("trigger_type").notNull(),
+  triggerConfig: jsonb("trigger_config").$type<{
+    // Time-based triggers
+    triggerOn?: "baseline-start" | "baseline-finish" | "actual-start" | "actual-finish" | "project-start" | "project-end" | "custom-date";
+    daysBefore?: number; // e.g., 7 days before
+    daysAfter?: number;  // e.g., 3 days after
+    customDate?: string; // ISO date string for custom-date trigger
+    
+    // Event-based triggers
+    eventType?: "task-status-change" | "task-progress-milestone" | "risk-created" | "risk-impact-changed" | 
+                "issue-created" | "issue-resolved" | "change-request-submitted" | "change-request-approved" |
+                "document-updated" | "calendar-event-created" | "calendar-event-reminder";
+    statusFrom?: string; // Previous status (for status-change events)
+    statusTo?: string;  // New status
+    progressThreshold?: number; // e.g., 50% milestone
+    riskImpactLevel?: "low" | "medium" | "high" | "critical";
+    
+    // Threshold-based triggers
+    thresholdType?: "cost-variance" | "schedule-variance" | "progress-variance";
+    thresholdValue?: number; // Percentage (e.g., 10 for 10%)
+    thresholdOperator?: "greater-than" | "less-than" | "equals";
+  }>(),
+  
+  // Scope: which tasks/projects this applies to
+  scopeType: notificationScopeTypeEnum("scope_type").notNull(),
+  taskIds: integer("task_ids").array(), // If specific tasks
+  calendarEventType: text("calendar_event_type"), // If scope is calendar-event
+  
+  // Recipient Selection (JSONB)
+  recipientType: notificationRecipientTypeEnum("recipient_type").notNull(),
+  recipients: jsonb("recipients").$type<{
+    stakeholderIds?: number[];
+    resourceIds?: number[];
+    contactIds?: number[];
+    userIds?: string[]; // Direct user IDs
+    roles?: string[]; // e.g., ["client-owner", "pmc"]
+    raciTypes?: string[]; // e.g., ["R", "A"] - only for task-level rules
+    groupIds?: number[]; // Future: custom groups
+  }>(),
+  
+  // Content Selection
+  emailTemplateId: integer("email_template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
+  reportType: varchar("report_type", { length: 50 }), // "task-summary" | "progress-report" | "risk-report" | "custom"
+  documentIds: integer("document_ids").array(), // Attach specific documents
+  customMessage: text("custom_message"), // Additional message to include
+  
+  // Frequency & Scheduling
+  frequency: notificationFrequencyEnum("frequency").default("one-time"),
+  maxOccurrences: integer("max_occurrences"), // Limit recurring notifications (null = unlimited)
+  lastTriggeredAt: timestamp("last_triggered_at"), // Track last execution
+  
+  // Status
+  isActive: boolean("is_active").default(true),
+  
+  // Metadata
+  createdBy: varchar("created_by", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  projectIdIdx: index("notification_rules_project_id_idx").on(table.projectId),
+  organizationIdIdx: index("notification_rules_organization_id_idx").on(table.organizationId),
+  isActiveIdx: index("notification_rules_is_active_idx").on(table.isActive),
+}));
+
+// Notification Logs (audit trail of all sent notifications)
+export const notificationLogs = pgTable("notification_logs", {
+  id: serial("id").primaryKey(),
+  ruleId: integer("rule_id").references(() => notificationRules.id, { onDelete: "set null" }),
+  
+  // Context (what triggered this notification)
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+  riskId: integer("risk_id").references(() => risks.id, { onDelete: "set null" }),
+  issueId: integer("issue_id").references(() => issues.id, { onDelete: "set null" }),
+  changeRequestId: integer("change_request_id").references(() => changeRequests.id, { onDelete: "set null" }),
+  calendarEventId: integer("calendar_event_id").references(() => projectEvents.id, { onDelete: "set null" }),
+  
+  // Recipient Info
+  recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
+  recipientName: varchar("recipient_name", { length: 255 }),
+  recipientType: varchar("recipient_type", { length: 50 }), // "stakeholder" | "resource" | "contact" | "user"
+  recipientId: integer("recipient_id"), // ID of stakeholder/resource/contact if applicable
+  
+  // Email Details
+  subject: text("subject").notNull(),
+  body: text("body"), // Full email body for audit
+  
+  // Delivery Status
+  status: varchar("status", { length: 50 }).notNull().default("pending"), // "pending" | "sent" | "failed" | "bounced"
+  sentAt: timestamp("sent_at"),
+  errorMessage: text("error_message"),
+  providerMessageId: varchar("provider_message_id", { length: 255 }), // Email provider's message ID
+  
+  // Attachments
+  attachments: jsonb("attachments").$type<Array<{
+    type: "document" | "report";
+    id: number;
+    name: string;
+  }>>(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  ruleIdIdx: index("notification_logs_rule_id_idx").on(table.ruleId),
+  projectIdIdx: index("notification_logs_project_id_idx").on(table.projectId),
+  recipientEmailIdx: index("notification_logs_recipient_email_idx").on(table.recipientEmail),
+  statusIdx: index("notification_logs_status_idx").on(table.status),
+  sentAtIdx: index("notification_logs_sent_at_idx").on(table.sentAt),
+}));
+
 // ==================== Junction Tables for Task Assignments ====================
 
 // Task-Document Assignments (for linking documents to tasks)
@@ -1653,6 +1807,24 @@ export const selectDailyReportSchema = createSelectSchema(dailyReports);
 export type InsertDailyReport = z.infer<typeof insertDailyReportSchema>;
 export type UpdateDailyReport = z.infer<typeof updateDailyReportSchema>;
 export type DailyReport = typeof dailyReports.$inferSelect;
+
+// ==================== Communication & Notification System Zod Schemas ====================
+
+// Zod Schemas for Notification Rules
+export const insertNotificationRuleSchema = createInsertSchema(notificationRules).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateNotificationRuleSchema = insertNotificationRuleSchema.partial();
+export const selectNotificationRuleSchema = createSelectSchema(notificationRules);
+export type InsertNotificationRule = z.infer<typeof insertNotificationRuleSchema>;
+export type UpdateNotificationRule = z.infer<typeof updateNotificationRuleSchema>;
+export type NotificationRule = typeof notificationRules.$inferSelect;
+
+// Zod Schemas for Notification Logs
+export const insertNotificationLogSchema = createInsertSchema(notificationLogs).omit({ id: true, createdAt: true });
+export const updateNotificationLogSchema = insertNotificationLogSchema.partial();
+export const selectNotificationLogSchema = createSelectSchema(notificationLogs);
+export type InsertNotificationLog = z.infer<typeof insertNotificationLogSchema>;
+export type UpdateNotificationLog = z.infer<typeof updateNotificationLogSchema>;
+export type NotificationLog = typeof notificationLogs.$inferSelect;
 
 // Zod Schemas for Daily Manpower
 export const insertDailyManpowerSchema = createInsertSchema(dailyManpower).omit({ id: true, createdAt: true });

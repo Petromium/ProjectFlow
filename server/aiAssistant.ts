@@ -1,8 +1,12 @@
 import OpenAI from "openai";
 import { GoogleGenAI } from '@google/genai';
+import * as crypto from "crypto";
 import type { IStorage } from "./storage";
 import type { InsertTask, InsertRisk, InsertIssue, InsertStakeholder, InsertProject } from "@shared/schema";
 import { logger } from "./lib/logger";
+import { db } from "./db";
+import * as schema from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 // Initialize OpenAI (legacy/fallback)
 const openaiApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;

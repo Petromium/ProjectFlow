@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Cloud, HardDrive, RefreshCw, Unlink, Check, AlertCircle, Clock, Loader2, ExternalLink, FolderSync, Sparkles, Mail, Users, FolderKanban, CreditCard, Tags, Replace, Search, UserPlus, MoreVertical, Pencil, Trash2, Plus, Eye, Send, Copy, Code, X, Bell } from "lucide-react";
+import { Cloud, HardDrive, RefreshCw, Unlink, Check, AlertCircle, Clock, Loader2, ExternalLink, FolderSync, Sparkles, Mail, Users, FolderKanban, CreditCard, Tags, Replace, Search, UserPlus, MoreVertical, Pencil, Trash2, Plus, Eye, Send, Copy, Code, X, Bell, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,6 +45,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import type { User, UserInvitation, EmailTemplate } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationRulesSection } from "@/components/NotificationRulesSection";
+import { OrganizationsSection } from "@/components/OrganizationsSection";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -1436,7 +1437,7 @@ export default function SettingsPage() {
   // Set active tab from URL query parameter
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam && ["usage", "cloud-storage", "storage", "users", "labels", "email-templates", "automation"].includes(tabParam)) {
+    if (tabParam && ["usage", "cloud-storage", "storage", "users", "labels", "email-templates", "automation", "organizations"].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -1573,7 +1574,9 @@ export default function SettingsPage() {
 
   const getConnectedProviders = () => connections.map((c) => c.provider);
 
-  if (!selectedProject) {
+  // Allow Organizations tab to be accessible without a project selected
+  // Other tabs require a project
+  if (!selectedProject && activeTab !== "organizations") {
     return (
       <div className="p-6">
         <Alert>
@@ -1622,6 +1625,10 @@ export default function SettingsPage() {
           <TabsTrigger value="automation" data-testid="tab-automation">
             <Bell className="h-4 w-4 mr-2" />
             Automation
+          </TabsTrigger>
+          <TabsTrigger value="organizations" data-testid="tab-organizations">
+            <Building2 className="h-4 w-4 mr-2" />
+            Organizations
           </TabsTrigger>
         </TabsList>
 
@@ -1874,6 +1881,7 @@ export default function SettingsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            if (!selectedProject) return;
                             setSyncingId(connection.id);
                             syncMutation.mutate({
                               connectionId: connection.id,
@@ -2030,7 +2038,16 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="labels" className="space-y-4">
-          <LabelManagementSection projectId={selectedProject.id} />
+          {selectedProject ? (
+            <LabelManagementSection projectId={selectedProject.id} />
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Please select a project to manage labels.
+              </AlertDescription>
+            </Alert>
+          )}
         </TabsContent>
 
         <TabsContent value="email-templates" className="space-y-4">
@@ -2039,6 +2056,10 @@ export default function SettingsPage() {
 
         <TabsContent value="automation" className="space-y-4">
           <NotificationRulesSection />
+        </TabsContent>
+
+        <TabsContent value="organizations" className="space-y-4">
+          <OrganizationsSection />
         </TabsContent>
       </Tabs>
 

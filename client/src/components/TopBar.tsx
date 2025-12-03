@@ -2,7 +2,7 @@ import { CreateProjectWizard } from "@/components/CreateProjectWizard";
 import { ProjectEditModal } from "@/components/ProjectEditModal";
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { Search, Plus, Download, Upload, Bell, Moon, Sun, User, X, Building2, FolderKanban, Settings, LogOut, Mail, Shield, CheckCheck, FileJson, FileText, AlertCircle, Info, Edit } from "lucide-react";
+import { Search, Plus, Download, Upload, Bell, Moon, Sun, User, X, Building2, FolderKanban, Settings, LogOut, Mail, Shield, CheckCheck, FileJson, FileText, AlertCircle, Info, Edit, Bot } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -567,6 +567,18 @@ export function TopBar() {
       />
 
       <div className="flex items-center gap-1 md:gap-2 ml-auto">
+        {/* AI Assistant Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden md:flex"
+          onClick={() => navigate("/ai-assistant")}
+          data-testid="button-ai-assistant"
+          title="AI Assistant"
+        >
+          <Bot className="h-4 w-4" />
+        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="hidden md:flex" disabled={isExporting} data-testid="button-import-export">

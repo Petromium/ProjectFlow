@@ -1,16 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ColumnDef } from "@tanstack/react-table";
 import { apiRequest } from "@/lib/queryClient";
 import { Contact } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,23 +44,26 @@ import {
   History
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useProject } from "@/contexts/ProjectContext";
 import Papa from "papaparse";
+import { DataTable, SortableHeader } from "@/components/ui/data-table";
+import { SelectionToolbar } from "@/components/ui/selection-toolbar";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 
 export default function ContactsPage() {
   const { selectedOrgId, selectedProjectId } = useProject();
   const selectedOrganizationId = selectedOrgId; // Alias for compatibility with my previous code
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
   const [selectedContactForLogs, setSelectedContactForLogs] = useState<Contact | null>(null);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   // Fetch contacts
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
@@ -75,16 +71,154 @@ export default function ContactsPage() {
     enabled: !!selectedOrganizationId,
   });
 
-  // Filter contacts
-  const filteredContacts = contacts.filter(contact => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      contact.firstName.toLowerCase().includes(searchLower) ||
-      contact.lastName.toLowerCase().includes(searchLower) ||
-      contact.email?.toLowerCase().includes(searchLower) ||
-      contact.company?.toLowerCase().includes(searchLower)
+  // Define columns
+  const columns = useMemo<ColumnDef<Contact>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Name</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {row.original.firstName} {row.original.lastName}
+            </span>
+            {row.original.jobTitle && (
+              <span className="text-xs text-muted-foreground">{row.original.jobTitle}</span>
+            )}
+          </div>
+        ),
+        accessorFn: (row) => `${row.firstName} ${row.lastName}`,
+      },
+      {
+        id: "contactInfo",
+        header: "Contact Info",
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1 text-sm">
+            {row.original.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="h-3 w-3 text-muted-foreground" />
+                <span>{row.original.email}</span>
+              </div>
+            )}
+            {row.original.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-3 w-3 text-muted-foreground" />
+                <span>{row.original.phone}</span>
+              </div>
+            )}
+            {!row.original.email && !row.original.phone && (
+              <span className="text-muted-foreground">-</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "company",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Company</SortableHeader>
+        ),
+        cell: ({ row }) =>
+          row.original.company ? (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-3 w-3 text-muted-foreground" />
+              <span>{row.original.company}</span>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          ),
+      },
+      {
+        accessorKey: "type",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Type</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant="secondary" className="capitalize">
+            {row.original.type}
+          </Badge>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => {
+          const contact = row.original;
+          return (
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setSelectedContactForLogs(contact)}>
+                    <History className="mr-2 h-4 w-4" />
+                    View History
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
+
+  const handleExport = (contactsToExport: Contact[] | null) => {
+    const dataToExport = contactsToExport || contacts;
+    const csv = Papa.unparse(
+      dataToExport.map((c) => ({
+        "First Name": c.firstName,
+        "Last Name": c.lastName,
+        Email: c.email || "",
+        Phone: c.phone || "",
+        Company: c.company || "",
+        "Job Title": c.jobTitle || "",
+        Type: c.type || "",
+      }))
     );
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `contacts_${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Success", description: "Contacts exported successfully" });
+  };
+
+  // Bulk delete contacts mutation
+  const bulkDeleteContactsMutation = useMutation({
+    mutationFn: async (contactIds: number[]) => {
+      await Promise.all(contactIds.map(id => apiRequest("DELETE", `/api/contacts/${id}`)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/organizations/${selectedOrganizationId}/contacts`] });
+      setBulkDeleteDialogOpen(false);
+      setSelectedContacts([]);
+      toast({ title: "Success", description: `${selectedContacts.length} contact(s) deleted successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete contacts", variant: "destructive" });
+    },
   });
+
+  const handleBulkAction = (action: string, items: Contact[]) => {
+    if (action === "assign") {
+      setIsAssignOpen(true);
+    } else if (action === "export") {
+      handleExport(items);
+    } else if (action === "delete") {
+      setBulkDeleteDialogOpen(true);
+    }
+  };
 
   // Create contact mutation
   const createContactMutation = useMutation({
@@ -142,9 +276,9 @@ export default function ContactsPage() {
   // Assign to project mutation
   const assignToProjectMutation = useMutation({
     mutationFn: async (data: { role: 'stakeholder' | 'resource', type?: string, rate?: number }) => {
-      const promises = selectedContacts.map(contactId =>
+      const promises = selectedContacts.map(contact =>
         apiRequest("POST", `/api/projects/${selectedProjectId}/assign-contact`, {
-          contactId,
+          contactId: contact.id,
           ...data
         })
       );
@@ -219,12 +353,6 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedContacts.length > 0 && (
-            <Button onClick={() => setIsAssignOpen(true)} variant="secondary">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Assign to Project ({selectedContacts.length})
-            </Button>
-          )}
           <Button 
             variant="outline" 
             onClick={() => syncContactsMutation.mutate()}
@@ -329,132 +457,89 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 px-6 py-4">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search contacts..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex-1 overflow-auto px-6 py-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <DataTable
+              columns={columns}
+              data={contacts}
+              searchKey="name"
+              searchPlaceholder="Search contacts by name, email, or company..."
+              enableSelection={true}
+              enableColumnVisibility={true}
+              enableExport={true}
+              enableSorting={true}
+              enableFiltering={true}
+              onSelectionChange={setSelectedContacts}
+              onExport={handleExport}
+              emptyMessage="No contacts found"
+              getRowId={(row) => row.id.toString()}
+            />
+            {/* Selection Toolbar */}
+            <SelectionToolbar
+              selectedCount={selectedContacts.length}
+              selectedItems={selectedContacts}
+              onClearSelection={() => setSelectedContacts([])}
+              onBulkAction={handleBulkAction}
+              position="sticky"
+              bulkActions={[
+                {
+                  label: "Assign to Project",
+                  action: "assign",
+                  icon: <UserPlus className="h-4 w-4" />,
+                  variant: "default",
+                },
+                {
+                  label: "Delete Selected",
+                  action: "delete",
+                  icon: <Trash2 className="h-4 w-4" />,
+                  variant: "destructive",
+                },
+                {
+                  label: "Export Selected",
+                  action: "export",
+                  icon: <Upload className="h-4 w-4" />,
+                  variant: "outline",
+                },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="px-6 pb-6">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">
-                    <input
-                      type="checkbox"
-                      className="translate-y-[2px]"
-                      checked={selectedContacts.length === filteredContacts.length && filteredContacts.length > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedContacts(filteredContacts.map(c => c.id));
-                        } else {
-                          setSelectedContacts([]);
-                        }
-                      }}
-                    />
-                  </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Contact Info</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                    </TableCell>
-                  </TableRow>
-                ) : filteredContacts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No contacts found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredContacts.map((contact) => (
-                    <TableRow key={contact.id}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          className="translate-y-[2px]"
-                          checked={selectedContacts.includes(contact.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedContacts([...selectedContacts, contact.id]);
-                            } else {
-                              setSelectedContacts(selectedContacts.filter(id => id !== contact.id));
-                            }
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{contact.firstName} {contact.lastName}</span>
-                          <span className="text-xs text-muted-foreground">{contact.jobTitle}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1 text-sm">
-                          {contact.email && (
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-3 w-3 text-muted-foreground" />
-                              <span>{contact.email}</span>
-                            </div>
-                          )}
-                          {contact.phone && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              <span>{contact.phone}</span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {contact.company && (
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-3 w-3 text-muted-foreground" />
-                            <span>{contact.company}</span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="capitalize">
-                          {contact.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setSelectedContactForLogs(contact)}>
-                              <History className="mr-2 h-4 w-4" />
-                              View History
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </div>
-      </ScrollArea>
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Contacts</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedContacts.length} selected contact(s)? This action cannot be undone.
+              <br /><br />
+              <strong>Contacts to delete:</strong>
+              <ul className="list-disc list-inside mt-2 max-h-32 overflow-y-auto">
+                {selectedContacts.map(c => <li key={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ""}</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const ids = selectedContacts.map(c => c.id);
+                bulkDeleteContactsMutation.mutate(ids);
+              }}
+              className="bg-destructive text-destructive-foreground"
+              disabled={bulkDeleteContactsMutation.isPending}
+            >
+              {bulkDeleteContactsMutation.isPending ? "Deleting..." : `Delete ${selectedContacts.length} Contact(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Assign to Project Dialog */}
       <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>

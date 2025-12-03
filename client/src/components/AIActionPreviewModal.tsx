@@ -229,11 +229,44 @@ export function AIActionPreviewModal({
             {preview.preview && (
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold">Preview:</h4>
-                <div className="p-3 bg-muted rounded-lg">
-                  <pre className="text-xs overflow-x-auto">
-                    {JSON.stringify(preview.preview, null, 2)}
-                  </pre>
-                </div>
+                {/* Special handling for project creation */}
+                {preview.preview.summary && (
+                  <div className="p-3 bg-muted rounded-lg space-y-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      {preview.preview.summary.tasksCount !== undefined && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Initial Tasks</p>
+                          <p className="text-lg font-semibold">{preview.preview.summary.tasksCount}</p>
+                        </div>
+                      )}
+                      {preview.preview.summary.risksCount !== undefined && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Initial Risks</p>
+                          <p className="text-lg font-semibold">{preview.preview.summary.risksCount}</p>
+                        </div>
+                      )}
+                    </div>
+                    {preview.preview.project && (
+                      <div className="pt-2 border-t space-y-1">
+                        <p className="text-xs font-medium">Project: {preview.preview.project.name}</p>
+                        {preview.preview.project.code && (
+                          <p className="text-xs text-muted-foreground">Code: {preview.preview.project.code}</p>
+                        )}
+                        {preview.preview.project.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{preview.preview.project.description}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Fallback to JSON for other previews */}
+                {!preview.preview.summary && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <pre className="text-xs overflow-x-auto">
+                      {JSON.stringify(preview.preview, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
           </div>

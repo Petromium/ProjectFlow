@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useProject } from "@/contexts/ProjectContext";
+import { useLocation } from "wouter";
 import { insertProjectSchema, type InsertProject, type Project } from "@shared/schema";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import { ImportFieldMapper } from "./ImportFieldMapper";
 
 import { TemplateSelector } from "./TemplateSelector";
 import { TemplatePreview } from "./TemplatePreview";
+import { CreateProjectAIStep } from "./CreateProjectAIStep";
 
 // Extend shared schema for UI specific needs (e.g. optional code for templates)
 const projectSchema = insertProjectSchema.extend({
@@ -61,6 +63,7 @@ export function CreateProjectWizard({ open, onOpenChange }: CreateProjectWizardP
   const { toast } = useToast();
   const { selectedOrgId } = useProject();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
   // Reset state when closing
@@ -208,8 +211,6 @@ export function CreateProjectWizard({ open, onOpenChange }: CreateProjectWizardP
                 title="Create from AI"
                 description="Describe your project and let AI generate the structure."
                 onClick={() => handleMethodSelect('ai')}
-                disabled={true} // Coming in Phase 3
-                badge="Coming Soon"
               />
               <MethodCard
                 icon={Upload}
@@ -416,6 +417,20 @@ export function CreateProjectWizard({ open, onOpenChange }: CreateProjectWizardP
         {step === 2 && method === 'import' && (
           <div className="px-6 pb-6 flex-1 overflow-y-auto">
             <ImportFieldMapper onBack={handleBack} onClose={() => onOpenChange(false)} />
+          </div>
+        )}
+
+        {step === 2 && method === 'ai' && selectedOrgId && (
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <CreateProjectAIStep
+              organizationId={selectedOrgId}
+              onBack={handleBack}
+              onCancel={() => onOpenChange(false)}
+              onProjectCreated={(projectId) => {
+                onOpenChange(false);
+                navigate(`/projects/${projectId}`);
+              }}
+            />
           </div>
         )}
       </DialogContent>

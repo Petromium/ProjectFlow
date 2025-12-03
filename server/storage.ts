@@ -132,6 +132,7 @@ export interface IStorage {
   getAllOrganizations(): Promise<Organization[]>;
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: number, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
+  deleteOrganization(id: number): Promise<void>;
 
   // Users (Replit Auth compatible)
   getUser(id: string): Promise<User | undefined>;
@@ -560,6 +561,10 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async deleteOrganization(id: number): Promise<void> {
+    await db.delete(schema.organizations).where(eq(schema.organizations.id, id));
+  }
+
   // Users
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
@@ -621,14 +626,30 @@ export class DatabaseStorage implements IStorage {
     if (!demoOrg) {
       // Auto-create default organization in development mode
       demoOrg = await this.createOrganization({
-        name: "My Organization",
+        name: "Demo Organization",
         slug: DEMO_ORG_SLUG,
       });
-      console.log("Created default organization for dev user:", demoOrg.name);
+      logger.info(`Created demo organization`, { organizationId: demoOrg.id, name: demoOrg.name });
     }
 
     const existingAssignment = await this.getUserOrganization(userId, demoOrg.id);
     if (existingAssignment) {
+      // User already assigned, but check if org has projects
+      const projects = await this.getProjectsByOrganization(demoOrg.id);
+      if (projects.length === 0) {
+        // Create a demo project for the user
+        await this.createProject({
+          organizationId: demoOrg.id,
+          name: "Welcome Project",
+          code: "DEMO-001",
+          description: "This is a demo project to help you get started. You can explore the features or create your own organization and projects.",
+          status: "active",
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
+          currency: "USD",
+        });
+        logger.info(`Created demo project for user`, { userId, organizationId: demoOrg.id });
+      }
       return;
     }
 
@@ -638,6 +659,22 @@ export class DatabaseStorage implements IStorage {
       role: "owner",
     });
     logger.info(`Assigned user to organization as owner`, { userId, organizationId: demoOrg.id });
+
+    // Create a demo project for new users
+    const projects = await this.getProjectsByOrganization(demoOrg.id);
+    if (projects.length === 0) {
+      await this.createProject({
+        organizationId: demoOrg.id,
+        name: "Welcome Project",
+        code: "DEMO-001",
+        description: "This is a demo project to help you get started. You can explore the features or create your own organization and projects.",
+        status: "active",
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
+        currency: "USD",
+      });
+      logger.info(`Created demo project for new user`, { userId, organizationId: demoOrg.id });
+    }
   }
 
   // User Organizations

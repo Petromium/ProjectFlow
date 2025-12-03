@@ -107,6 +107,18 @@ export const organizations = pgTable("organizations", {
   name: text("name").notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
   currency: varchar("currency", { length: 3 }).notNull().default("EUR"), // Organization default currency
+  // Branding fields
+  logoUrl: text("logo_url"), // Uploaded logo URL (GCS path)
+  address: text("address"), // Full address
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  postalCode: varchar("postal_code", { length: 20 }),
+  country: varchar("country", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }), // Organization contact email
+  website: varchar("website", { length: 255 }),
+  taxId: varchar("tax_id", { length: 100 }), // VAT/Tax/Invoice number
+  registrationNumber: varchar("registration_number", { length: 100 }), // Company registration
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

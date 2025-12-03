@@ -394,6 +394,14 @@ export async function setupAuth(app: Express) {
 
                 await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
+                // Ensure user has a demo organization assigned
+                try {
+                    await storage.assignDemoOrgToUser(user.id);
+                } catch (error) {
+                    logger.error("[AUTH] Error assigning demo org on login", error instanceof Error ? error : new Error(String(error)), { userId: user.id });
+                    // Don't fail login if org assignment fails, but log it
+                }
+
                 if (user.pendingTotpVerification) {
                     return res.json({
                         requires2FA: true,

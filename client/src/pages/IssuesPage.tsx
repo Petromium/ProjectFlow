@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { TableRowCard } from "@/components/TableRowCard";
+import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Edit, Trash2, AlertCircle, Calendar, CheckCircle2, AlertTriangle, DollarSign, Clock, Shield, Wrench } from "lucide-react";
+import { Edit, Trash2, AlertCircle, Calendar, CheckCircle2, AlertTriangle, DollarSign, Clock, Shield, Wrench, MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useProject } from "@/contexts/ProjectContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -29,6 +28,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Issue } from "@shared/schema";
+import { DataTable, SortableHeader } from "@/components/ui/data-table";
+import { SelectionToolbar } from "@/components/ui/selection-toolbar";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import Papa from "papaparse";
 
 const ISSUE_TYPES = [
   { value: "design", label: "Design" },
@@ -120,9 +123,9 @@ export default function IssuesPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
-  const [selectedIssues, setSelectedIssues] = useState<number[]>([]);
+  const [selectedIssues, setSelectedIssues] = useState<Issue[]>([]);
   const [formData, setFormData] = useState<IssueFormData>(initialFormData);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -147,15 +150,174 @@ export default function IssuesPage() {
     retry: 1,
   });
 
-  const filteredIssues = useMemo(() => {
-    if (!searchQuery) return issues;
-    const query = searchQuery.toLowerCase();
-    return issues.filter(issue => 
-      issue.title.toLowerCase().includes(query) ||
-      issue.description?.toLowerCase().includes(query) ||
-      issue.code?.toLowerCase().includes(query)
+  const getImpactIcons = (issue: Issue) => {
+    const impacts = [];
+    if (issue.impactCost) impacts.push({ icon: DollarSign, label: "Cost", color: "text-amber-500" });
+    if (issue.impactSchedule) impacts.push({ icon: Clock, label: "Schedule", color: "text-blue-500" });
+    if (issue.impactQuality) impacts.push({ icon: Wrench, label: "Quality", color: "text-purple-500" });
+    if (issue.impactSafety) impacts.push({ icon: Shield, label: "Safety", color: "text-red-500" });
+    return impacts;
+  };
+
+  // Define columns
+  const columns = useMemo<ColumnDef<Issue>[]>(
+    () => [
+      {
+        accessorKey: "code",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Code</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <div className="text-sm font-mono text-muted-foreground">{row.original.code}</div>
+        ),
+      },
+      {
+        accessorKey: "title",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Issue</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <div>
+            <div className="font-medium">{row.original.title}</div>
+            {row.original.description && (
+              <div className="text-sm text-muted-foreground line-clamp-1">{row.original.description}</div>
+            )}
+            {row.original.discipline && (
+              <Badge variant="outline" className="mt-1 text-xs capitalize">{row.original.discipline}</Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "issueType",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Type</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant="outline" className="capitalize">{row.original.issueType || "design"}</Badge>
+        ),
+      },
+      {
+        accessorKey: "priority",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Priority</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant={getPriorityVariant(row.original.priority)} className="capitalize">
+            {row.original.priority}
+          </Badge>
+        ),
+      },
+      {
+        id: "impacts",
+        header: "Impacts",
+        cell: ({ row }) => {
+          const impacts = getImpactIcons(row.original);
+          return (
+            <div className="flex gap-1">
+              {impacts.length > 0 ? (
+                impacts.map((impact, idx) => (
+                  <span key={idx} title={impact.label}>
+                    <impact.icon className={`h-4 w-4 ${impact.color}`} />
+                  </span>
+                ))
+              ) : (
+                <span className="text-muted-foreground text-sm">-</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "escalationLevel",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Escalation</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant="secondary" className="capitalize">{row.original.escalationLevel || "project"}</Badge>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Status</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant={getStatusVariant(row.original.status)} className="capitalize">
+            {row.original.status.replace("-", " ")}
+          </Badge>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => {
+          const issue = row.original;
+          return (
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" data-testid={`button-actions-${issue.id}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleEdit(issue)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDelete(issue.id)} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
+
+  const handleExport = (issuesToExport: Issue[] | null) => {
+    const dataToExport = issuesToExport || issues;
+    const csv = Papa.unparse(
+      dataToExport.map((i) => ({
+        Code: i.code || "",
+        Title: i.title,
+        Type: i.issueType || "",
+        Priority: i.priority,
+        Status: i.status,
+        "Escalation Level": i.escalationLevel || "",
+        Discipline: i.discipline || "",
+        "Impact Cost": i.impactCost ? "Yes" : "No",
+        "Impact Schedule": i.impactSchedule ? "Yes" : "No",
+        "Impact Quality": i.impactQuality ? "Yes" : "No",
+        "Impact Safety": i.impactSafety ? "Yes" : "No",
+        "Assigned To": i.assignedTo || "",
+        "Target Resolution Date": i.targetResolutionDate ? new Date(i.targetResolutionDate).toLocaleDateString() : "",
+      }))
     );
-  }, [issues, searchQuery]);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `issues_${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Success", description: "Issues exported successfully" });
+  };
+
+  const handleBulkAction = (action: string, items: Issue[]) => {
+    if (action === "export") {
+      handleExport(items);
+    } else if (action === "delete") {
+      setBulkDeleteDialogOpen(true);
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: IssueFormData) => {
@@ -215,6 +377,22 @@ export default function IssuesPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk delete issues mutation
+  const bulkDeleteIssuesMutation = useMutation({
+    mutationFn: async (issueIds: number[]) => {
+      await Promise.all(issueIds.map(id => apiRequest("DELETE", `/api/issues/${id}`)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/issues`] });
+      setBulkDeleteDialogOpen(false);
+      setSelectedIssues([]);
+      toast({ title: "Success", description: `${selectedIssues.length} issue(s) deleted successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete issues", variant: "destructive" });
     },
   });
 
@@ -286,15 +464,6 @@ export default function IssuesPage() {
     }
   };
 
-  const getImpactIcons = (issue: Issue) => {
-    const impacts = [];
-    if (issue.impactCost) impacts.push({ icon: DollarSign, label: "Cost", color: "text-amber-500" });
-    if (issue.impactSchedule) impacts.push({ icon: Clock, label: "Schedule", color: "text-blue-500" });
-    if (issue.impactQuality) impacts.push({ icon: Wrench, label: "Quality", color: "text-purple-500" });
-    if (issue.impactSafety) impacts.push({ icon: Shield, label: "Safety", color: "text-red-500" });
-    return impacts;
-  };
-
   if (!selectedProjectId) {
     return (
       <div className="p-6">
@@ -328,105 +497,84 @@ export default function IssuesPage() {
         </Alert>
       )}
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder="Search issues..."
-          className="pl-9"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          data-testid="input-search-issues"
-        />
-      </div>
-
       {isLoading ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Loading issues...</p>
         </div>
-      ) : filteredIssues.length === 0 ? (
+      ) : issues.length === 0 ? (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold mb-2">No Issues Found</h2>
           <p className="text-muted-foreground mb-4">Get started by reporting issues to your project</p>
           <Button onClick={handleAddNew} data-testid="button-add-first-issue">Report Issue</Button>
         </div>
       ) : (
-        <div className="space-y-2">
-          <div className="grid grid-cols-[60px,3fr,1fr,1fr,1fr,1fr,100px,100px] gap-4 px-4 py-2 text-sm font-medium text-muted-foreground border-b">
-            <div>Code</div>
-            <div>Issue</div>
-            <div>Type</div>
-            <div>Priority</div>
-            <div>Impacts</div>
-            <div>Escalation</div>
-            <div>Status</div>
-            <div>Actions</div>
-          </div>
-          {filteredIssues.map((issue) => {
-            const impacts = getImpactIcons(issue);
-            return (
-              <TableRowCard
-                key={issue.id}
-                id={issue.id.toString()}
-                selected={selectedIssues.includes(issue.id)}
-                onSelect={(selected) => {
-                  setSelectedIssues(prev =>
-                    selected ? [...prev, issue.id] : prev.filter(id => id !== issue.id)
-                  );
-                }}
-                data-testid={`row-issue-${issue.id}`}
-              >
-                <div className="grid grid-cols-[60px,3fr,1fr,1fr,1fr,1fr,100px,100px] gap-4 items-center flex-1">
-                  <div className="text-sm font-mono text-muted-foreground">{issue.code}</div>
-                  <div>
-                    <div className="font-medium">{issue.title}</div>
-                    {issue.description && (
-                      <div className="text-sm text-muted-foreground line-clamp-1">{issue.description}</div>
-                    )}
-                    {issue.discipline && (
-                      <Badge variant="outline" className="mt-1 text-xs capitalize">{issue.discipline}</Badge>
-                    )}
-                  </div>
-                  <Badge variant="outline" className="capitalize">{issue.issueType || "design"}</Badge>
-                  <Badge variant={getPriorityVariant(issue.priority)} className="capitalize">
-                    {issue.priority}
-                  </Badge>
-                  <div className="flex gap-1">
-                    {impacts.length > 0 ? (
-                      impacts.map((impact, idx) => (
-                        <span key={idx} title={impact.label}>
-                          <impact.icon className={`h-4 w-4 ${impact.color}`} />
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </div>
-                  <Badge variant="secondary" className="capitalize">{issue.escalationLevel || "project"}</Badge>
-                  <Badge variant={getStatusVariant(issue.status)} className="capitalize">
-                    {issue.status.replace("-", " ")}
-                  </Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" data-testid={`button-actions-${issue.id}`}>
-                        Actions
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEdit(issue)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(issue.id)} className="text-destructive">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TableRowCard>
-            );
-          })}
+        <div className="space-y-4">
+          <DataTable
+            columns={columns}
+            data={issues}
+            searchKey="title"
+            searchPlaceholder="Search issues by title, code, or description..."
+            enableSelection={true}
+            enableColumnVisibility={true}
+            enableExport={true}
+            enableSorting={true}
+            enableFiltering={true}
+            onSelectionChange={setSelectedIssues}
+            onExport={handleExport}
+            emptyMessage="No issues found"
+            getRowId={(row) => row.id.toString()}
+          />
+          <SelectionToolbar
+            selectedCount={selectedIssues.length}
+            selectedItems={selectedIssues}
+            onClearSelection={() => setSelectedIssues([])}
+            onBulkAction={handleBulkAction}
+            position="sticky"
+            bulkActions={[
+              {
+                label: "Delete Selected",
+                action: "delete",
+                icon: <Trash2 className="h-4 w-4" />,
+                variant: "destructive",
+              },
+              {
+                label: "Export Selected",
+                action: "export",
+                icon: <DollarSign className="h-4 w-4" />,
+                variant: "outline",
+              },
+            ]}
+          />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Issues</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedIssues.length} selected issue(s)? This action cannot be undone.
+              <br /><br />
+              <strong>Issues to delete:</strong>
+              <ul className="list-disc list-inside mt-2 max-h-32 overflow-y-auto">
+                {selectedIssues.map(i => <li key={i.id}>{i.code}: {i.title}</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const ids = selectedIssues.map(i => i.id);
+                bulkDeleteIssuesMutation.mutate(ids);
+              }}
+              className="bg-destructive text-destructive-foreground"
+              disabled={bulkDeleteIssuesMutation.isPending}
+            >
+              {bulkDeleteIssuesMutation.isPending ? "Deleting..." : `Delete ${selectedIssues.length} Issue(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
         </div>
       )}
 

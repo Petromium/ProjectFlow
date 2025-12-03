@@ -1,7 +1,7 @@
 import OpenAI from "openai";
-import { VertexAI, FunctionDeclarationSchemaType, Content, Part } from '@google-cloud/vertexai';
+import { GoogleGenAI } from '@google/genai';
 import type { IStorage } from "./storage";
-import type { InsertTask, InsertRisk, InsertIssue, InsertStakeholder } from "@shared/schema";
+import type { InsertTask, InsertRisk, InsertIssue, InsertStakeholder, InsertProject } from "@shared/schema";
 import { logger } from "./lib/logger";
 
 // Initialize OpenAI (legacy/fallback)
@@ -11,41 +11,41 @@ const openai = openaiApiKey ? new OpenAI({
   apiKey: openaiApiKey
 }) : null;
 
-// Initialize Google Vertex AI (Gemini)
-const googleProjectId = process.env.GOOGLE_PROJECT_ID || process.env.GCLOUD_PROJECT;
-const GEMINI_MODEL = 'gemini-1.5-flash-001';
+// Initialize Gemini API (direct API, not Vertex AI)
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+const geminiClient = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
-// Region selection: Automatically determines best regions based on user location
-// TODO: Enhance to use user's actual location from profile/settings when available
-function getPreferredRegions(userLocation?: string | null): string[] {
-  // If user location is provided, prioritize regions closest to user
-  // For now, we use intelligent defaults that try all major regions
-  // Future: Map user location (country/timezone) to nearest GCP regions
-  
-  // Smart default: Try all major regions in order of global coverage
-  // This ensures best availability regardless of where the user is located
-  return [
-    'us-central1',      // United States (Iowa) - Most reliable, best model availability
-    'europe-west1',     // Belgium - Good for Europe/Middle East
-    'me-central1',      // Qatar - Closest to Middle East
-    'asia-southeast1', // Singapore - Good for Asia-Pacific
-  ];
-}
-
-// Create VertexAI instances for each region (lazy initialization)
-const vertexAIClients: Map<string, VertexAI> = new Map();
-
-function getVertexAIClient(location: string): VertexAI {
-  if (!googleProjectId) return null as any;
-  
-  if (!vertexAIClients.has(location)) {
-    vertexAIClients.set(location, new VertexAI({ 
-      project: googleProjectId, 
-      location: location 
-    }));
+// Available Gemini models (current versions, not discontinued 1.5)
+export const GEMINI_MODELS = {
+  'gemini-2.5-pro': {
+    name: 'gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    description: 'Best reasoning for complex analysis',
+    tier: 'premium' as const,
+    limits: '150 RPM, 2M TPM, 10K/day',
+    cost: 'Higher cost'
+  },
+  'gemini-2.5-flash': {
+    name: 'gemini-2.5-flash',
+    displayName: 'Gemini 2.5 Flash',
+    description: 'Balanced performance and speed',
+    tier: 'standard' as const,
+    limits: '1K RPM, 1M TPM, 10K/day',
+    cost: 'Standard cost'
+  },
+  'gemini-2.5-flash-lite': {
+    name: 'gemini-2.5-flash-lite',
+    displayName: 'Gemini 2.5 Flash Lite',
+    description: 'High throughput for simple queries',
+    tier: 'standard' as const,
+    limits: '4K RPM, 4M TPM, Unlimited/day',
+    cost: 'Standard cost'
   }
-  return vertexAIClients.get(location)!;
-}
+} as const;
+
+// Default model (can be overridden by user selection)
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const FALLBACK_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 // Define available functions for the AI assistant (OpenAI Format)
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -262,6 +262,69 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         required: ["taskId", "resourceId"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_project_from_ai",
+      description: "Create a new EPC project based on user description, attached files, and conversation. Always uses previewMode=true to show preview first. Can generate comprehensive project structure including initial tasks (up to 200), risks (up to 200), and milestones based on project type and requirements.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: { type: "number", description: "The organization ID for the project" },
+          name: { type: "string", description: "Project name" },
+          code: { type: "string", description: "Project code (e.g., PRJ-2024-001)" },
+          description: { type: "string", description: "Detailed project description" },
+          startDate: { type: "string", format: "date-time", description: "Project start date" },
+          endDate: { type: "string", format: "date-time", description: "Project end date" },
+          budget: { type: "number", description: "Project budget" },
+          currency: { type: "string", description: "Currency code (default: USD)" },
+          status: { type: "string", enum: ["planning", "active", "on-hold", "completed", "archived"], description: "Initial project status" },
+          initialTasks: {
+            type: "array",
+            description: "Initial tasks to create with the project (up to 200 tasks). Should be comprehensive and cover all project phases.",
+            maxItems: 200,
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                description: { type: "string" },
+                estimatedHours: { type: "number" },
+                priority: { type: "string", enum: ["low", "medium", "high", "critical"] },
+                startDate: { type: "string", format: "date-time" },
+                endDate: { type: "string", format: "date-time" },
+                parentTaskIndex: { type: "number", description: "Index of parent task in initialTasks array (for hierarchy)" }
+              },
+              required: ["title"]
+            }
+          },
+          initialRisks: {
+            type: "array",
+            description: "Initial risks to create with the project (up to 200 risks). Should cover common EPC project risks for the project type.",
+            maxItems: 200,
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                description: { type: "string" },
+                category: { type: "string", description: "Risk category (e.g., Technical, Financial, Schedule, Safety, Environmental)" },
+                probability: { type: "number", minimum: 1, maximum: 5, description: "Probability rating 1-5" },
+                impact: { type: "string", enum: ["low", "medium", "high", "critical"] },
+                mitigationPlan: { type: "string", description: "Mitigation strategy" }
+              },
+              required: ["title"]
+            }
+          },
+          questions: {
+            type: "array",
+            description: "Questions the AI needs answered before creating the project",
+            items: { type: "string" }
+          },
+          previewMode: { type: "boolean", default: true }
+        },
+        required: ["organizationId", "name", "code", "previewMode"]
+      }
+    }
   }
 ];
 
@@ -414,6 +477,66 @@ export async function generatePreview(
           priority: args.priority || 'medium',
           category: args.category,
           assignedTo: args.assignedTo,
+        }
+      };
+    }
+
+    case "create_project_from_ai": {
+      const { organizationId, name, code, description, startDate, endDate, budget, currency, status, initialTasks, initialRisks, questions } = args;
+      
+      // Verify organization access
+      const userOrg = await storage.getUserOrganization(userId, organizationId);
+      if (!userOrg) {
+        throw new Error("Access denied to organization");
+      }
+      
+      // Validate limits (safety check)
+      const tasksCount = initialTasks?.length || 0;
+      const risksCount = initialRisks?.length || 0;
+      
+      if (tasksCount > 200) {
+        throw new Error("Maximum 200 initial tasks allowed");
+      }
+      if (risksCount > 200) {
+        throw new Error("Maximum 200 initial risks allowed");
+      }
+      
+      return {
+        actionId,
+        type: 'create',
+        entity: 'project',
+        description: `Create new project: ${name}`,
+        changes: [
+          { field: 'name', newValue: name, type: 'add' },
+          { field: 'code', newValue: code, type: 'add' },
+          { field: 'description', newValue: description || '', type: 'add' },
+          { field: 'startDate', newValue: startDate || null, type: 'add' },
+          { field: 'endDate', newValue: endDate || null, type: 'add' },
+          { field: 'budget', newValue: budget || null, type: 'add' },
+          { field: 'currency', newValue: currency || 'USD', type: 'add' },
+          { field: 'status', newValue: status || 'planning', type: 'add' },
+          { field: 'initialTasks', newValue: `${tasksCount} tasks`, type: 'add' },
+          { field: 'initialRisks', newValue: `${risksCount} risks`, type: 'add' }
+        ],
+        preview: {
+          project: { 
+            name, 
+            code, 
+            description, 
+            startDate, 
+            endDate, 
+            budget, 
+            currency: currency || 'USD', 
+            status: status || 'planning' 
+          },
+          initialTasks: initialTasks || [],
+          initialRisks: initialRisks || [],
+          questions: questions || [],
+          summary: {
+            tasksCount,
+            risksCount,
+            totalItems: tasksCount + risksCount
+          }
         }
       };
     }
@@ -739,6 +862,117 @@ async function executeFunctionCall(
         }
       }
 
+      case "create_project_from_ai": {
+        const { organizationId, name, code, description, startDate, endDate, budget, currency, status, initialTasks, initialRisks } = args;
+        
+        // Verify organization access
+        const userOrg = await storage.getUserOrganization(userId, organizationId);
+        if (!userOrg) {
+          throw new Error("Access denied to organization");
+        }
+        
+        // Validate limits
+        const tasksCount = initialTasks?.length || 0;
+        const risksCount = initialRisks?.length || 0;
+        
+        if (tasksCount > 200) {
+          throw new Error("Maximum 200 initial tasks allowed");
+        }
+        if (risksCount > 200) {
+          throw new Error("Maximum 200 initial risks allowed");
+        }
+        
+        // Execute creation
+        const projectData: InsertProject = {
+          organizationId,
+          name,
+          code,
+          description: description || undefined,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          budget: budget ? budget.toString() : undefined,
+          currency: currency || 'USD',
+          status: status || 'planning'
+        };
+        
+        const project = await storage.createProject(projectData);
+        
+        let tasksCreated = 0;
+        let risksCreated = 0;
+        
+        // Create initial tasks if provided (support hierarchy via parentTaskIndex)
+        if (initialTasks && initialTasks.length > 0) {
+          const taskMap = new Map<number, number>(); // Maps array index to created task ID
+          
+          // First pass: Create all tasks
+          for (let i = 0; i < initialTasks.length; i++) {
+            const task = initialTasks[i];
+            const parentId = task.parentTaskIndex !== undefined && task.parentTaskIndex >= 0 && task.parentTaskIndex < i
+              ? taskMap.get(task.parentTaskIndex) || null
+              : null;
+            
+            const createdTask = await storage.createTask({
+              projectId: project.id,
+              name: task.title,
+              description: task.description || null,
+              estimatedHours: task.estimatedHours || null,
+              priority: task.priority || 'medium',
+              startDate: task.startDate ? new Date(task.startDate) : null,
+              endDate: task.endDate ? new Date(task.endDate) : null,
+              status: 'not-started',
+              progress: 0,
+              parentId,
+              wbsCode: 'TBD',
+              actualHours: null,
+              createdBy: userId
+            });
+            
+            taskMap.set(i, createdTask.id);
+            tasksCreated++;
+          }
+        }
+        
+        // Create initial risks if provided
+        if (initialRisks && initialRisks.length > 0) {
+          for (const risk of initialRisks) {
+            const existingRisks = await storage.getRisksByProject(project.id);
+            const nextNumber = existingRisks.length + 1;
+            const riskCode = `RISK-${String(nextNumber).padStart(3, '0')}`;
+            
+            const riskData: InsertRisk = {
+              projectId: project.id,
+              code: riskCode,
+              title: risk.title,
+              description: risk.description || null,
+              category: risk.category || null,
+              status: 'identified',
+              probability: risk.probability || 3,
+              impact: risk.impact || 'medium',
+              mitigationPlan: risk.mitigationPlan || null,
+              owner: null,
+              identifiedDate: new Date()
+            };
+            
+            await storage.createRisk(riskData);
+            risksCreated++;
+          }
+        }
+        
+        return JSON.stringify({ 
+          success: true, 
+          project, 
+          tasksCreated,
+          risksCreated,
+          summary: {
+            projectId: project.id,
+            projectName: project.name,
+            tasksCreated,
+            risksCreated,
+            totalItemsCreated: tasksCreated + risksCreated
+          }
+        });
+      }
+
       default:
         throw new Error(`Unknown or unauthorized function: ${name}`);
     }
@@ -765,104 +999,134 @@ export interface ChatResponse {
 
 // Convert OpenAI tools to Gemini tools
 function convertToolsToGemini(tools: any[]) {
-  return tools.map(tool => {
-    return {
+  // Gemini API expects tools as array with functionDeclarations
+  return [{
+    functionDeclarations: tools.map(tool => ({
       name: tool.function.name,
       description: tool.function.description,
-      parameters: tool.function.parameters // Gemini accepts JSON Schema directly in parameters
-    };
-  });
+      parameters: tool.function.parameters // Gemini accepts JSON Schema directly
+    }))
+  }];
 }
 
-// Helper function for Gemini chat with region fallback
+// Helper function for Gemini API chat with model fallback
 async function chatWithGemini(
   messages: ChatMessage[],
   systemContent: string,
   storage: IStorage,
-  userId: string
+  userId: string,
+  modelName: string = DEFAULT_GEMINI_MODEL
 ): Promise<ChatResponse> {
-  if (!googleProjectId) throw new Error("Vertex AI not initialized - GOOGLE_PROJECT_ID not set");
+  if (!geminiClient) {
+    throw new Error("Gemini API not initialized - GEMINI_API_KEY not set");
+  }
 
-  // Get user location if available (future enhancement)
-  // TODO: Fetch user's location/preference from database when user profile includes location field
-  const userLocation: string | null = null; // Placeholder for future user location
+  // Validate model name
+  const selectedModel = GEMINI_MODELS[modelName as keyof typeof GEMINI_MODELS];
+  if (!selectedModel) {
+    throw new Error(`Invalid model: ${modelName}. Available models: ${Object.keys(GEMINI_MODELS).join(', ')}`);
+  }
 
-  const preferredRegions = getPreferredRegions(userLocation);
+  // Try primary model first, fallback to flash-lite if rate limited
+  const modelsToTry = [modelName];
+  if (modelName !== FALLBACK_GEMINI_MODEL) {
+    modelsToTry.push(FALLBACK_GEMINI_MODEL);
+  }
+  
   let lastError: Error | null = null;
 
-  // Try each region in order until one works
-  for (const region of preferredRegions) {
+  for (const currentModel of modelsToTry) {
     try {
-      const vertexAI = getVertexAIClient(region);
-      const generativeModel = vertexAI.getGenerativeModel({
-        model: GEMINI_MODEL,
-        systemInstruction: { parts: [{ text: systemContent }] },
-        tools: [{ functionDeclarations: convertToolsToGemini(tools) }]
-      });
-
-      const history: Content[] = [];
+      const geminiTools = convertToolsToGemini(tools);
+      
+      // Convert messages format for Gemini API
+      const chatHistory: any[] = [];
       let lastUserMessage = "";
 
-      // Construct history. Skip the last user message as it's sent in sendMessage
-      // Also separate system message (passed in init)
+      // Build history (skip system message and last user message)
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
-        if (msg.role === 'system') continue; // System instruction handled separately
+        if (msg.role === 'system') continue;
 
         if (i === messages.length - 1 && msg.role === 'user') {
           lastUserMessage = msg.content;
           continue;
         }
 
-        history.push({
+        chatHistory.push({
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         });
       }
 
-      const chatSession = generativeModel.startChat({
-        history: history,
+      // Create chat session with system instruction and tools
+      const chat = geminiClient.chats.create({
+        model: currentModel,
+        config: {
+          systemInstruction: systemContent,
+          tools: geminiTools.length > 0 && geminiTools[0].functionDeclarations.length > 0 ? geminiTools : undefined
+        },
+        history: chatHistory.length > 0 ? chatHistory : undefined
       });
 
-      let result = await chatSession.sendMessage(lastUserMessage);
-      let response = result.response;
-      let totalTokens = result.response.usageMetadata?.totalTokenCount || 0;
+      const result = await chat.sendMessage({
+        message: lastUserMessage
+      });
       
+      let response = result;
+      let totalTokens = result.usageMetadata?.totalTokenCount || 0;
       const functionCallsExecuted: Array<{ name: string; args: any; result: string }> = [];
 
-      // Handle tool calls loop
-      while (response.candidates?.[0]?.content?.parts?.some(p => p.functionCall)) {
+      // Handle function calls loop (multi-step reasoning)
+      while (response.candidates?.[0]?.content?.parts?.some((p: any) => p.functionCall)) {
         const parts = response.candidates[0].content.parts;
-        const functionCallPart = parts.find(p => p.functionCall);
+        const functionCallPart = parts.find((p: any) => p.functionCall);
 
         if (functionCallPart && functionCallPart.functionCall) {
           const { name, args } = functionCallPart.functionCall;
           
-          // Check if this is a preview request (args.previewMode === true)
-          const executionMode = args.previewMode === true ? ExecutionMode.PREVIEW : ExecutionMode.EXECUTE;
-          const executionResult = await executeFunctionCall(name, args, storage, userId, executionMode);
-          functionCallsExecuted.push({ name, args, result: executionResult });
-
-          // Send result back to model
-          result = await chatSession.sendMessage([{
-            functionResponse: {
-              name: name,
-              response: { content: executionResult } 
-            }
-          }]);
+          if (!name || !args) {
+            logger.warn("[Gemini API] Invalid function call - missing name or args");
+            break;
+          }
           
-          response = result.response;
-          totalTokens += result.response.usageMetadata?.totalTokenCount || 0;
+          // Inject organizationId from context if available and function needs it
+          // This ensures AI doesn't need to ask for organizationId
+          const enrichedArgs = { ...args };
+          if (name === "create_project_from_ai" && context?.organizationId && !enrichedArgs.organizationId) {
+            enrichedArgs.organizationId = context.organizationId;
+          }
+          
+          // Check if this is a preview request
+          const executionMode = enrichedArgs.previewMode === true ? ExecutionMode.PREVIEW : ExecutionMode.EXECUTE;
+          const executionResult = await executeFunctionCall(name, enrichedArgs, storage, userId, executionMode);
+          functionCallsExecuted.push({ name, args: enrichedArgs, result: executionResult });
+
+          // Send result back to model using function response format
+          const result = await chat.sendMessage({
+            message: [{
+              functionResponse: {
+                name: name,
+                response: { content: executionResult }
+              }
+            }]
+          });
+          
+          response = result;
+          totalTokens += result.usageMetadata?.totalTokenCount || 0;
         } else {
-          break; 
+          break;
         }
       }
 
-      const finalText = response.candidates?.[0]?.content?.parts?.map(p => p.text).join(' ') || "No response generated";
+      const finalText = response.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text)
+        .filter(Boolean)
+        .join(' ') || "No response generated";
 
-      // Success! Log which region worked (for debugging)
-      if (region !== preferredRegions[0]) {
-        logger.debug(`[Vertex AI] Using fallback region: ${region} (primary ${preferredRegions[0]} unavailable)`);
+      // Log which model was used (if fallback)
+      if (currentModel !== modelName) {
+        logger.debug(`[Gemini API] Used fallback model: ${currentModel} (primary ${modelName} unavailable)`);
       }
 
       return {
@@ -871,29 +1135,33 @@ async function chatWithGemini(
         functionCalls: functionCallsExecuted.length > 0 ? functionCallsExecuted : undefined
       };
     } catch (error: any) {
-      // Check if it's a region/model availability error
-      const errorMessage = error?.message?.toLowerCase() || '';
-      const isRegionError = errorMessage.includes('not found') || 
-                           errorMessage.includes('not available') ||
-                           errorMessage.includes('permission denied') ||
-                           errorMessage.includes('invalid location') ||
-                           error.code === 404 ||
-                           error.code === 403;
+      const errorInfo: any = {
+        message: error?.message || String(error)
+      };
+      if (error?.code !== undefined) errorInfo.code = error.code;
+      if (error?.status !== undefined) errorInfo.status = error.status;
+      
+      logger.error(`[Gemini API] Error with model ${currentModel}:`, errorInfo);
 
-      if (isRegionError && region !== preferredRegions[preferredRegions.length - 1]) {
-        // This region failed, try next one
+      // Check if it's a rate limit error
+      const isRateLimit = error?.message?.includes('429') || 
+                         error?.message?.toLowerCase().includes('rate limit') ||
+                         error?.code === 429 ||
+                         error?.status === 429;
+
+      if (isRateLimit && currentModel !== modelsToTry[modelsToTry.length - 1]) {
+        // Try fallback model
         lastError = error;
-        logger.debug(`[Vertex AI] Region ${region} failed, trying fallback...`);
+        logger.warn(`[Gemini API] Rate limit on ${currentModel}, trying fallback...`);
         continue;
-      } else {
-        // Either not a region error, or we've exhausted all regions
-        throw error;
       }
+      
+      // Not a rate limit or last model, throw error
+      throw error;
     }
   }
 
-  // If we get here, all regions failed
-  throw lastError || new Error("All Vertex AI regions failed");
+  throw lastError || new Error("All Gemini models failed");
 }
 
 export async function chatWithAssistant(
@@ -908,6 +1176,8 @@ export async function chatWithAssistant(
     selectedIssueId?: number;
     selectedResourceId?: number;
     selectedItemIds?: number[];
+    modelName?: string; // User-selected model
+    organizationId?: number; // Organization ID from context
   }
 ): Promise<ChatResponse> {
   // Build context description
@@ -934,7 +1204,7 @@ export async function chatWithAssistant(
     contextParts.push(`User has selected ${context.selectedItemIds.length} item(s): ${context.selectedItemIds.join(", ")}`);
   }
 
-  const systemContent = `You are an expert EPC (Engineering, Procurement, Construction) project management assistant. 
+  let systemContent = `You are an expert EPC (Engineering, Procurement, Construction) project management assistant. 
 You help project managers with:
 - Analyzing project data (tasks, risks, issues, resources, costs)
 - Identifying performance issues and bottlenecks
@@ -957,17 +1227,68 @@ When analyzing data, be specific and provide actionable recommendations.
 Focus on EPC industry best practices and PMI standards.
 ${projectId ? `Current project context: Project ID ${projectId}` : 'No project selected. Ask user to select a project first.'}`;
 
-  // Prefer Gemini if configured
-  if (googleProjectId) {
+  // Special mode for project creation
+  if (context?.currentPage === "create-project-ai") {
+    const orgIdInfo = context?.organizationId 
+      ? `\n\n**IMPORTANT: Organization ID is ${context.organizationId} - you MUST use this organizationId when calling create_project_from_ai. Do NOT ask the user for organizationId - it's already available from context.**`
+      : '';
+    
+    systemContent += `
+
+**SPECIAL MODE: Project Creation Assistant**
+
+You are helping the user create a new EPC project.${orgIdInfo}
+
+Your role:
+1. Ask clarifying questions about:
+   - Project name and type (e.g., Solar Power Plant, Refinery, Pipeline)
+   - Capacity/size specifications
+   - Timeline (start date, duration, milestones)
+   - Budget and currency
+   - Key stakeholders and team structure
+   - Regulatory requirements
+   - Technical specifications
+
+2. Analyze attached files (specifications, requirements, contracts) to extract project details
+
+3. Generate a COMPREHENSIVE project structure including:
+   - Project metadata (name, code, description, dates, budget)
+   - **EXTENSIVE initial tasks (up to 200 tasks)** organized by phases:
+     * Engineering phase tasks (design, engineering, documentation)
+     * Procurement phase tasks (vendor selection, purchase orders, logistics)
+     * Construction phase tasks (site preparation, installation, commissioning)
+     * Quality and safety tasks
+     * Project management tasks
+   - **COMPREHENSIVE initial risks (up to 200 risks)** covering:
+     * Technical risks (design flaws, equipment failures)
+     * Schedule risks (delays, resource constraints)
+     * Financial risks (cost overruns, currency fluctuations)
+     * Safety risks (accidents, environmental incidents)
+     * Regulatory risks (permits, compliance)
+     * Supply chain risks (vendor delays, material shortages)
+   - Key milestones and deliverables
+
+4. Be THOROUGH - for large EPC projects, generate 50-200 tasks and 30-200 risks as appropriate for the project scope
+
+5. Present a preview using create_project_from_ai function with previewMode=true
+   ${context?.organizationId ? `- CRITICAL: Always include organizationId=${context.organizationId} in the function call - it's provided from context` : ''}
+
+6. Only proceed after user confirms the preview
+
+Be thorough but conversational. Ask one question at a time if needed. For large projects, don't hesitate to generate comprehensive task lists and risk registers.`;
+  }
+
+  // Prefer Gemini API if configured
+  const selectedModel = context?.modelName || DEFAULT_GEMINI_MODEL;
+  
+  if (geminiApiKey) {
     try {
-      return await chatWithGemini(messages, systemContent, storage, userId);
+      return await chatWithGemini(messages, systemContent, storage, userId, selectedModel, context);
     } catch (error: any) {
-      console.error("Gemini Chat Error:", error);
-      // Fallback to OpenAI if Gemini fails? Or just throw? 
-      // User explicitly requested Gemini, so better to throw error than silent fallback if they think they are using Gemini.
-      // But if they haven't set it up yet, fallback is okay.
+      logger.error("Gemini API Error:", error);
+      // Fallback to OpenAI if Gemini fails
       if (!openai) throw error;
-      console.log("Falling back to OpenAI...");
+      logger.info("Falling back to OpenAI...");
     }
   }
 
@@ -982,7 +1303,7 @@ ${projectId ? `Current project context: Project ID ${projectId}` : 'No project s
 
     if (!openai) {
       return {
-        message: "AI Assistant is not configured. Please set GOOGLE_PROJECT_ID (for Gemini) or OPENAI_API_KEY in your environment variables.",
+        message: "AI Assistant is not configured. Please set GEMINI_API_KEY (for Gemini API) or OPENAI_API_KEY in your environment variables.",
         tokensUsed: 0
       };
     }

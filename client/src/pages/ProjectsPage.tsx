@@ -1,27 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { ColumnDef } from "@tanstack/react-table";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/hooks/useAuth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { 
-  Plus, Search, Edit, Trash2, Copy, Loader2, 
-  AlertCircle, ChevronRight
+  Plus, Edit, Trash2, Copy, Loader2, 
+  AlertCircle, ChevronRight, MoreHorizontal
 } from "lucide-react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -32,18 +23,22 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import type { Project } from "@shared/schema";
 import { ProjectEditModal } from "@/components/ProjectEditModal";
+import { DataTable, SortableHeader } from "@/components/ui/data-table";
+import { SelectionToolbar } from "@/components/ui/selection-toolbar";
+import Papa from "papaparse";
 
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { selectedProjectId, setSelectedProjectId } = useProject();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [projectToDuplicate, setProjectToDuplicate] = useState<Project | null>(null);
+  const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   // Get user's organizations
   const { data: organizations = [], isLoading: isLoadingOrgs } = useQuery<Array<{ id: number; name: string }>>({
@@ -61,11 +56,148 @@ export default function ProjectsPage() {
 
   const isLoading = isLoadingOrgs || isLoadingProjects;
 
-  // Filter projects
-  const filteredProjects = projects.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.code.toLowerCase().includes(searchQuery.toLowerCase())
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      active: "bg-green-500",
+      "on-hold": "bg-amber-500",
+      completed: "bg-gray-500",
+      cancelled: "bg-red-500",
+    };
+    return colors[status] || "bg-blue-500";
+  };
+
+  // Define columns
+  const columns = useMemo<ColumnDef<Project>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Name</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <div className="font-medium">{row.original.name}</div>
+        ),
+      },
+      {
+        accessorKey: "code",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Code</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <div className="font-mono text-sm">{row.original.code}</div>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Status</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge className={getStatusColor(row.original.status)}>
+            {row.original.status}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "startDate",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Start Date</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const date = row.original.startDate;
+          return date ? new Date(date).toLocaleDateString() : "-";
+        },
+      },
+      {
+        accessorKey: "endDate",
+        header: ({ column }) => (
+          <SortableHeader column={column}>End Date</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const date = row.original.endDate;
+          return date ? new Date(date).toLocaleDateString() : "-";
+        },
+      },
+      {
+        accessorKey: "budget",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Budget</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const budget = row.original.budget;
+          return budget ? `$${Number(budget).toLocaleString()}` : "-";
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => {
+          const project = row.original;
+          return (
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleEditProject(project)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDuplicateProject(project)}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => handleDeleteProject(project)}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ],
+    []
   );
+
+  const handleExport = (projectsToExport: Project[] | null) => {
+    const dataToExport = projectsToExport || projects;
+    const csv = Papa.unparse(
+      dataToExport.map((p) => ({
+        Name: p.name,
+        Code: p.code,
+        Status: p.status,
+        "Start Date": p.startDate ? new Date(p.startDate).toLocaleDateString() : "",
+        "End Date": p.endDate ? new Date(p.endDate).toLocaleDateString() : "",
+        Budget: p.budget ? Number(p.budget).toLocaleString() : "",
+      }))
+    );
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `projects_${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Success", description: "Projects exported successfully" });
+  };
+
+  const handleBulkAction = (action: string, items: Project[]) => {
+    if (action === "delete") {
+      setBulkDeleteDialogOpen(true);
+    } else if (action === "export") {
+      handleExport(items);
+    }
+  };
 
   // Create project mutation
   const createProjectMutation = useMutation({
@@ -125,6 +257,28 @@ export default function ProjectsPage() {
     },
   });
 
+  // Bulk delete projects mutation
+  const bulkDeleteProjectsMutation = useMutation({
+    mutationFn: async (projectIds: number[]) => {
+      await Promise.all(projectIds.map(id => apiRequest("DELETE", `/api/projects/${id}`)));
+    },
+    onSuccess: () => {
+      if (selectedOrgId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/organizations/${selectedOrgId}/projects`] });
+      }
+      setBulkDeleteDialogOpen(false);
+      setSelectedProjects([]);
+      // Clear selected project if it was deleted
+      if (selectedProjectId && selectedProjects.some(p => p.id === selectedProjectId)) {
+        setSelectedProjectId(null);
+      }
+      toast({ title: "Success", description: `${selectedProjects.length} project(s) deleted successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete projects", variant: "destructive" });
+    },
+  });
+
   // Duplicate project mutation
   const duplicateProjectMutation = useMutation({
     mutationFn: async ({ id, name, code }: { id: number; name: string; code: string }) => {
@@ -164,16 +318,6 @@ export default function ProjectsPage() {
     setDuplicateDialogOpen(true);
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      active: "bg-green-500",
-      "on-hold": "bg-amber-500",
-      completed: "bg-gray-500",
-      cancelled: "bg-red-500",
-    };
-    return colors[status] || "bg-blue-500";
-  };
-
   if (isLoadingOrgs) {
     return (
       <div className="p-6">
@@ -206,93 +350,45 @@ export default function ProjectsPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search projects..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
       {/* Projects Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 text-center">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-            </div>
-          ) : filteredProjects.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground">
-              {searchQuery ? "No projects found" : "No projects yet. Create your first project!"}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
-                  <TableHead>Budget</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjects.map((project) => (
-                  <TableRow key={project.id}>
-                    <TableCell className="font-medium">{project.name}</TableCell>
-                    <TableCell className="font-mono text-sm">{project.code}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(project.status)}>
-                        {project.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {project.startDate ? new Date(project.startDate).toLocaleDateString() : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {project.endDate ? new Date(project.endDate).toLocaleDateString() : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {project.budget ? `$${Number(project.budget).toLocaleString()}` : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditProject(project)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDuplicateProject(project)}>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Duplicate
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteProject(project)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <DataTable
+            columns={columns}
+            data={projects}
+            searchKey="name"
+            searchPlaceholder="Search projects by name or code..."
+            enableSelection={true}
+            enableColumnVisibility={true}
+            enableExport={true}
+            enableSorting={true}
+            enableFiltering={true}
+            onSelectionChange={setSelectedProjects}
+            onExport={handleExport}
+            emptyMessage={projects.length === 0 ? "No projects yet. Create your first project!" : "No projects found."}
+            getRowId={(row) => row.id.toString()}
+          />
+          <SelectionToolbar
+            selectedCount={selectedProjects.length}
+            selectedItems={selectedProjects}
+            onClearSelection={() => setSelectedProjects([])}
+            onBulkAction={handleBulkAction}
+            position="sticky"
+            bulkActions={[
+              {
+                label: "Delete Selected",
+                action: "delete",
+                icon: <Trash2 className="h-4 w-4" />,
+                variant: "destructive",
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Create/Edit Project Modal */}
       <ProjectEditModal
@@ -332,6 +428,36 @@ export default function ProjectsPage() {
         project={projectToDuplicate}
         onDuplicate={(name, code) => projectToDuplicate && duplicateProjectMutation.mutate({ id: projectToDuplicate.id, name, code })}
       />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Projects</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedProjects.length} selected project(s)? This action cannot be undone and will delete all tasks, resources, and other project data for these projects.
+              <br /><br />
+              <strong>Projects to delete:</strong>
+              <ul className="list-disc list-inside mt-2 max-h-32 overflow-y-auto">
+                {selectedProjects.map(p => <li key={p.id}>{p.name} ({p.code})</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const ids = selectedProjects.map(p => p.id);
+                bulkDeleteProjectsMutation.mutate(ids);
+              }}
+              className="bg-destructive text-destructive-foreground"
+              disabled={bulkDeleteProjectsMutation.isPending}
+            >
+              {bulkDeleteProjectsMutation.isPending ? "Deleting..." : `Delete ${selectedProjects.length} Project(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

@@ -103,9 +103,7 @@ import { logUserActivity } from "./middleware/audit";
 import { uploadLimiter, userApiLimiter } from "./middleware/security";
 import { wsManager } from "./websocket";
 import { schedulingService } from "./scheduling";
-import { db } from "./db";
-import { eq, inArray, and } from "drizzle-orm";
-import * as schema from "@shared/schema";
+import { logger } from "./services/cloudLogging";
 
 // Helper to get user ID from request
 function getUserId(req: any): string {
@@ -142,6 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error: any) {
+      const userId = getUserId(req);
       logger.error("Error fetching user", error instanceof Error ? error : new Error(String(error)), { userId });
       res.status(500).json({ message: "Failed to fetch user" });
     }
@@ -151,9 +150,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/organizations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const organizations = await storage.getOrganizationsByUser(userId);
+      let organizations = await storage.getOrganizationsByUser(userId);
+      
+      // If user has no organizations, ensure they get assigned to demo org
+      if (organizations.length === 0) {
+        try {
+          await storage.assignDemoOrgToUser(userId);
+          // Fetch again after assignment
+          organizations = await storage.getOrganizationsByUser(userId);
+        } catch (assignError) {
+          logger.error("Error assigning demo org", assignError instanceof Error ? assignError : new Error(String(assignError)), { userId });
+          // Continue anyway - return empty array rather than failing
+        }
+      }
+      
       res.json(organizations);
     } catch (error: any) {
+      const userId = getUserId(req);
       logger.error("Error fetching organizations", error instanceof Error ? error : new Error(String(error)), { userId });
       res.status(500).json({ message: "Failed to fetch organizations" });
     }
@@ -175,8 +188,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(organization);
     } catch (error: any) {
-      logger.error("Error creating organization", error instanceof Error ? error : new Error(String(error)), { userId, data });
-      res.status(400).json({ message: "Failed to create organization" });
+      const userId = getUserId(req);
+      logger.error("Error creating organization", error instanceof Error ? error : new Error(String(error)), { userId, data: req.body });
+      res.status(400).json({ message: error.message || "Failed to create organization" });
+    }
+  });
+
+  app.patch('/api/organizations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+
+      // Check access (owner/admin required)
+      const userOrg = await storage.getUserOrganization(userId, orgId);
+      if (!userOrg || !['owner', 'admin'].includes(userOrg.role)) {
+        return res.status(403).json({ message: "Owner or admin access required" });
+      }
+
+      const data = insertOrganizationSchema.partial().parse(req.body);
+      const updated = await storage.updateOrganization(orgId, data);
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Organization not found" });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+      logger.error("Error updating organization", error instanceof Error ? error : new Error(String(error)), { userId, orgId });
+      res.status(400).json({ message: error.message || "Failed to update organization" });
+    }
+  });
+
+  app.delete('/api/organizations/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+
+      // Check access (owner required for deletion)
+      const userOrg = await storage.getUserOrganization(userId, orgId);
+      if (!userOrg || userOrg.role !== 'owner') {
+        return res.status(403).json({ message: "Owner access required to delete organization" });
+      }
+
+      // Get stats for deletion confirmation
+      const projects = await storage.getProjectsByOrganization(orgId);
+      const users = await storage.getUsersByOrganization(orgId);
+
+      await storage.deleteOrganization(orgId);
+
+      res.json({ 
+        success: true,
+        deleted: {
+          organizationId: orgId,
+          projectsDeleted: projects.length,
+          usersRemoved: users.length,
+        }
+      });
+    } catch (error: any) {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+      logger.error("Error deleting organization", error instanceof Error ? error : new Error(String(error)), { userId, orgId });
+      res.status(400).json({ message: error.message || "Failed to delete organization" });
+    }
+  });
+
+  app.get('/api/organizations/:id/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+
+      // Check access
+      const userOrg = await storage.getUserOrganization(userId, orgId);
+      if (!userOrg) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const projects = await storage.getProjectsByOrganization(orgId);
+      const users = await storage.getUsersByOrganization(orgId);
+
+      res.json({
+        projectCount: projects.length,
+        userCount: users.length,
+      });
+    } catch (error: any) {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.id);
+      logger.error("Error fetching organization stats", error instanceof Error ? error : new Error(String(error)), { userId, orgId });
+      res.status(500).json({ message: "Failed to fetch organization stats" });
     }
   });
 
@@ -219,6 +319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(usersWithRoles);
     } catch (error: any) {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
       logger.error("Error fetching organization users", error instanceof Error ? error : new Error(String(error)), { userId, orgId });
       res.status(500).json({ message: "Failed to fetch users" });
     }
@@ -5644,7 +5746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new conversation
   const createConversationSchema = z.object({
     title: z.string().optional(),
-    projectId: z.number().optional(),
+    projectId: z.number().nullable().optional(), // Allow null for project creation conversations
   });
 
   app.post('/api/ai/conversations', isAuthenticated, async (req: any, res) => {
@@ -5693,6 +5795,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send message and get AI response
+  // Get available Gemini models
+  app.get('/api/ai/models', isAuthenticated, async (req, res) => {
+    try {
+      const { GEMINI_MODELS } = await import('./aiAssistant');
+      const models = Object.values(GEMINI_MODELS).map(model => ({
+        id: model.name,
+        displayName: model.displayName,
+        description: model.description,
+        tier: model.tier,
+        limits: model.limits,
+        cost: model.cost
+      }));
+      res.json({ models });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch models" });
+    }
+  });
+
   const chatMessageSchema = z.object({
     conversationId: z.number(),
     message: z.string(),
@@ -5703,6 +5823,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       selectedIssueId: z.number().optional(),
       selectedResourceId: z.number().optional(),
       selectedItemIds: z.array(z.number()).optional(),
+      modelName: z.string().optional(), // User-selected Gemini model
+      organizationId: z.number().optional(), // Organization ID for project creation
     }).optional(),
   });
 
@@ -9032,6 +9154,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error: any) {
+      const userId = getUserId(req);
+      const messageId = parseInt(req.params.id);
+      const emoji = decodeURIComponent(req.params.emoji);
       logger.error("Error removing reaction", error instanceof Error ? error : new Error(String(error)), { userId, messageId, emoji });
       res.status(500).json({ message: error.message || "Failed to remove reaction" });
     }
@@ -9111,6 +9236,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mimeType,
       });
     } catch (error: any) {
+      const userId = getUserId(req);
+      const conversationId = req.body?.conversationId;
       logger.error("Error uploading file", error instanceof Error ? error : new Error(String(error)), { userId, conversationId });
       res.status(500).json({ message: error.message || "Failed to upload file" });
     }

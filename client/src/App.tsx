@@ -20,7 +20,6 @@ import { initGA } from "@/lib/analytics";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
-import { FloatingAIButton } from "@/components/FloatingAIButton";
 import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import WBSPage from "@/pages/WBSPage";
@@ -224,7 +223,6 @@ function AuthenticatedApp() {
               </div>
             </div>
             </SidebarProvider>
-            <FloatingAIButton />
             <Toaster />
           </AIPromptProvider>
         </AIContextProvider>

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send, Plus, Trash2, Bot, User, Sparkles, AlertCircle, Pencil, Copy, Check, Settings as SettingsIcon } from "lucide-react";
+import { MessageSquare, Send, Plus, Trash2, Bot, User, Sparkles, AlertCircle, Pencil, Copy, Check, Settings as SettingsIcon, Zap, Info } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { AiConversation, AiMessage } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { AISettingsModal, getAISettings, type AISettings } from "@/components/ai/AISettingsModal";
@@ -45,8 +58,37 @@ export default function AIAssistantPage() {
   const [aiSettings, setAiSettings] = useState<AISettings>(() => getAISettings());
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [pendingPreview, setPendingPreview] = useState<{ preview: ActionPreview; functionName: string; args: any } | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash'); // Default to Flash
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevProjectIdRef = useRef<number | null>(null);
+
+  // Available Gemini models with metadata
+  const geminiModels = [
+    {
+      id: 'gemini-2.5-pro',
+      name: 'Gemini 2.5 Pro',
+      description: 'Best reasoning for complex analysis',
+      tier: 'premium' as const,
+      limits: '150 RPM, 2M TPM, 10K/day',
+      warning: 'Premium model - Limited usage or higher cost'
+    },
+    {
+      id: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
+      description: 'Balanced performance and speed',
+      tier: 'standard' as const,
+      limits: '1K RPM, 1M TPM, 10K/day',
+      warning: null
+    },
+    {
+      id: 'gemini-2.5-flash-lite',
+      name: 'Gemini 2.5 Flash Lite',
+      description: 'High throughput for simple queries',
+      tier: 'standard' as const,
+      limits: '4K RPM, 4M TPM, Unlimited/day',
+      warning: null
+    }
+  ];
 
   useEffect(() => {
     if (pendingPrompt) {
@@ -133,6 +175,7 @@ export default function AIAssistantPage() {
           selectedIssueId: context.selectedIssueId,
           selectedResourceId: context.selectedResourceId,
           selectedItemIds: context.selectedItemIds,
+          modelName: selectedModel, // Pass selected model to backend
         },
       });
       return response;
@@ -539,6 +582,55 @@ export default function AIAssistantPage() {
 
             {/* Message Input */}
             <div className="p-4 border-t">
+              {/* Model Selector */}
+              <div className="mb-3 flex items-center gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Model:</label>
+                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={sendMessageMutation.isPending}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {geminiModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{model.name}</span>
+                            {model.tier === 'premium' && (
+                              <Badge variant="outline" className="text-xs">
+                                <Zap className="h-3 w-3 mr-1" />
+                                Premium
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{model.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {geminiModels.find(m => m.id === selectedModel)?.tier === 'premium' && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <Info className="h-3 w-3" />
+                          <span>Premium model - Limited usage or higher cost</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p className="text-xs">
+                          Pro models consume more of your monthly AI usage quota. 
+                          Use Flash models for standard queries to save usage.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <div className="ml-auto text-xs text-muted-foreground">
+                  Limits: {geminiModels.find(m => m.id === selectedModel)?.limits}
+                </div>
+              </div>
+
               {/* Attachment Preview */}
               {attachments.length > 0 && (
                 <div className="mb-2">

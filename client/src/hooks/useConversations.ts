@@ -32,8 +32,16 @@ export function useCreateConversation() {
       const response = await apiRequest("POST", "/api/chat/conversations", data);
       return (await response.json()) as Conversation;
     },
-    onSuccess: () => {
+    onSuccess: (conversation, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/conversations"] });
+      // Invalidate task-specific conversation query if this is a task conversation
+      if (variables.taskId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/chat/conversations/task", variables.taskId] });
+      }
+      // Invalidate project-specific conversation query if this is a project conversation
+      if (variables.projectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/chat/conversations/project", variables.projectId] });
+      }
     },
   });
 }

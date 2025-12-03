@@ -40,12 +40,15 @@ import { useAIPrompt } from "@/contexts/AIPromptContext";
 import { AIFileAttachment, type AttachmentFile, prepareAttachmentsForMessage } from "@/components/ai/AIFileAttachment";
 import { AIMentionInput } from "@/components/ai/AIMentionInput";
 import { AIActionPreviewModal, type ActionPreview } from "@/components/AIActionPreviewModal";
+import { AIAssistantPreviewSidebar } from "@/components/AIAssistantPreviewSidebar";
+import { useLocation } from "wouter";
 
 export default function AIAssistantPage() {
-  const { selectedProjectId, selectedProject } = useProject();
+  const { selectedProjectId, selectedProject, selectedOrgId } = useProject();
   const { context } = useAIContext();
   const { toast } = useToast();
   const { pendingPrompt, clearPendingPrompt } = useAIPrompt();
+  const [, navigate] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -58,9 +61,15 @@ export default function AIAssistantPage() {
   const [aiSettings, setAiSettings] = useState<AISettings>(() => getAISettings());
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [pendingPreview, setPendingPreview] = useState<{ preview: ActionPreview; functionName: string; args: any } | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash'); // Default to Flash
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-pro'); // Default to Pro for project creation
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevProjectIdRef = useRef<number | null>(null);
+
+  // Detect create-project mode from URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const isCreateProjectMode = searchParams.get("mode") === "create-project";
+  const orgIdFromUrl = searchParams.get("orgId");
+  const createProjectOrgId = orgIdFromUrl ? parseInt(orgIdFromUrl) : selectedOrgId;
 
   // Available Gemini models with metadata
   const geminiModels = [
@@ -141,12 +150,13 @@ export default function AIAssistantPage() {
   // Create conversation mutation
   const createConversationMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedProjectId) {
+      // In create-project mode, we don't need a project
+      if (!isCreateProjectMode && !selectedProjectId) {
         throw new Error("Please select a project first");
       }
       return await apiRequest("POST", "/api/ai/conversations", {
-        title: "New Conversation",
-        projectId: selectedProjectId,
+        title: isCreateProjectMode ? "Create New Project" : "New Conversation",
+        projectId: isCreateProjectMode ? null : selectedProjectId,
       });
     },
     onSuccess: (newConversation: any) => {
@@ -154,12 +164,22 @@ export default function AIAssistantPage() {
         queryClient.invalidateQueries({ queryKey: [`/api/ai/conversations/project/${selectedProjectId}`] });
       }
       setSelectedConversationId(newConversation.id);
-      toast({ title: "Success", description: "New conversation created" });
+      if (!isCreateProjectMode) {
+        toast({ title: "Success", description: "New conversation created" });
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Auto-create conversation for create-project mode
+  useEffect(() => {
+    if (isCreateProjectMode && !selectedConversationId && !createConversationMutation.isPending) {
+      createConversationMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreateProjectMode, selectedConversationId]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -169,18 +189,19 @@ export default function AIAssistantPage() {
         conversationId: selectedConversationId,
         message,
         context: {
-          currentPage: context.currentPage,
+          currentPage: isCreateProjectMode ? "create-project-ai" : context.currentPage,
           selectedTaskId: context.selectedTaskId,
           selectedRiskId: context.selectedRiskId,
           selectedIssueId: context.selectedIssueId,
           selectedResourceId: context.selectedResourceId,
           selectedItemIds: context.selectedItemIds,
           modelName: selectedModel, // Pass selected model to backend
+          organizationId: isCreateProjectMode ? createProjectOrgId : undefined, // Pass orgId for create-project mode
         },
       });
-      return response;
+      return response.json();
     },
-    onSuccess: (response: any) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: [`/api/ai/conversations/${selectedConversationId}/messages`] });
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: [`/api/ai/conversations/project/${selectedProjectId}`] });
@@ -188,16 +209,21 @@ export default function AIAssistantPage() {
       setMessageInput("");
       
       // Handle function calls with previews
-      if (response.functionCalls && Array.isArray(response.functionCalls) && response.functionCalls.length > 0) {
+      if (data.functionCalls && Array.isArray(data.functionCalls) && data.functionCalls.length > 0) {
         // Find the first function call with a preview
-        for (const funcCall of response.functionCalls) {
+        for (const funcCall of data.functionCalls) {
           try {
             const resultData = typeof funcCall.result === 'string' ? JSON.parse(funcCall.result) : funcCall.result;
             if (resultData.preview) {
+              // Inject organizationId into args if missing
+              const enrichedArgs = {
+                ...funcCall.args,
+                organizationId: funcCall.args.organizationId || createProjectOrgId,
+              };
               setPendingPreview({
                 preview: resultData.preview,
                 functionName: funcCall.name,
-                args: funcCall.args,
+                args: enrichedArgs,
               });
               break; // Show first preview only
             }
@@ -298,11 +324,30 @@ export default function AIAssistantPage() {
     }
   };
 
+  const handleModifyPreview = (message: string) => {
+    // Focus input and set message
+    setMessageInput(message);
+    // Focus the textarea element directly
+    setTimeout(() => {
+      const textarea = document.querySelector('textarea[placeholder*="Describe your project"]') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        textarea.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }, 100);
+  };
+
+  const handlePreviewDismiss = () => {
+    setPendingPreview(null);
+  };
+
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   
   // Get project name - conversations are always from the selected project
   // (filtered by selectedProjectId on backend)
-  const conversationProjectName = selectedProject?.name || "No project selected";
+  const conversationProjectName = selectedProject?.name || (isCreateProjectMode ? "Creating New Project" : "No project selected");
+
+  const showPreviewSidebar = isCreateProjectMode && pendingPreview && pendingPreview.functionName === "create_project_from_ai";
 
   return (
     <div className="flex h-full gap-4 p-6">
@@ -327,9 +372,9 @@ export default function AIAssistantPage() {
               size="icon"
               variant="ghost"
               onClick={() => createConversationMutation.mutate()}
-              disabled={createConversationMutation.isPending || !selectedProjectId}
+              disabled={createConversationMutation.isPending || (!isCreateProjectMode && !selectedProjectId)}
               data-testid="button-new-conversation"
-              title={!selectedProjectId ? "Please select a project first" : "Create new conversation"}
+              title={!isCreateProjectMode && !selectedProjectId ? "Please select a project first" : "Create new conversation"}
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -338,7 +383,7 @@ export default function AIAssistantPage() {
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {!selectedProjectId ? (
+            {!isCreateProjectMode && !selectedProjectId ? (
               <div className="p-4 text-center text-sm text-muted-foreground" data-testid="text-select-project">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 Please select a project to view AI conversations
@@ -408,7 +453,7 @@ export default function AIAssistantPage() {
       </Card>
 
       {/* Chat Area */}
-      <Card className="flex-1 flex flex-col">
+      <Card className={showPreviewSidebar ? "flex-1 flex flex-col" : "flex-1 flex flex-col"}>
         {!selectedConversationId ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <Sparkles className="h-16 w-16 text-primary/20 mb-4" data-testid="icon-sparkles" />
@@ -418,13 +463,21 @@ export default function AIAssistantPage() {
             <p className="text-muted-foreground max-w-md mb-4" data-testid="text-welcome-description">
               I can help you analyze project data, identify risks, track resources, and provide actionable insights for your EPC projects.
             </p>
-            {!selectedProjectId ? (
+            {!isCreateProjectMode && !selectedProjectId ? (
               <Alert data-testid="alert-no-project">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
                   Please select a project from the top bar to use the AI Assistant.
                 </AlertDescription>
               </Alert>
+            ) : isCreateProjectMode ? (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Create Project with AI</h3>
+                <p className="text-sm text-muted-foreground">
+                  Describe your project and I'll help you create a comprehensive project structure with tasks, risks, and milestones.
+                  You can attach files with specifications, requirements, or contracts.
+                </p>
+              </div>
             ) : (
               <Button
                 onClick={() => createConversationMutation.mutate()}
@@ -467,7 +520,9 @@ export default function AIAssistantPage() {
                 <div className="text-center text-muted-foreground" data-testid="text-no-messages">
                   <Alert>
                     <AlertDescription>
-                      Start the conversation by asking me anything about your project. I can analyze risks, track resources, provide insights, and help you manage your EPC project effectively.
+                      {isCreateProjectMode 
+                        ? "Describe your project and I'll help you create a comprehensive project structure with tasks, risks, and milestones. You can attach files with specifications, requirements, or contracts."
+                        : "Start the conversation by asking me anything about your project. I can analyze risks, track resources, provide insights, and help you manage your EPC project effectively."}
                     </AlertDescription>
                   </Alert>
                 </div>
@@ -583,10 +638,10 @@ export default function AIAssistantPage() {
             {/* Message Input */}
             <div className="p-4 border-t">
               {/* Model Selector */}
-              <div className="mb-3 flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Model:</label>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label className="text-sm font-medium text-muted-foreground shrink-0">Model:</label>
                 <Select value={selectedModel} onValueChange={setSelectedModel} disabled={sendMessageMutation.isPending}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-[200px] min-w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -612,9 +667,9 @@ export default function AIAssistantPage() {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
                           <Info className="h-3 w-3" />
-                          <span>Premium model - Limited usage or higher cost</span>
+                          <span className="whitespace-nowrap">Premium model - Limited usage or higher cost</span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs">
@@ -626,7 +681,7 @@ export default function AIAssistantPage() {
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                <div className="ml-auto text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground shrink-0">
                   Limits: {geminiModels.find(m => m.id === selectedModel)?.limits}
                 </div>
               </div>
@@ -651,7 +706,7 @@ export default function AIAssistantPage() {
                 <AIMentionInput
                   value={messageInput}
                   onChange={setMessageInput}
-                  placeholder="Ask me anything about your project... Use @ to mention items"
+                  placeholder={isCreateProjectMode ? "Describe your project... Use @ to mention items or attach files" : "Ask me anything about your project... Use @ to mention items"}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -758,8 +813,23 @@ export default function AIAssistantPage() {
         onSettingsChange={setAiSettings}
       />
 
-      {/* Action Preview Modal */}
-      {pendingPreview && (
+      {/* Preview Sidebar (for create-project mode) */}
+      {showPreviewSidebar && (
+        <AIAssistantPreviewSidebar
+          preview={pendingPreview.preview}
+          functionName={pendingPreview.functionName}
+          args={pendingPreview.args}
+          onModify={handleModifyPreview}
+          onApprove={() => {
+            setPendingPreview(null);
+            // Navigation handled in sidebar component
+          }}
+          onDismiss={handlePreviewDismiss}
+        />
+      )}
+
+      {/* Action Preview Modal (for other actions) */}
+      {pendingPreview && !showPreviewSidebar && (
         <AIActionPreviewModal
           open={!!pendingPreview}
           onOpenChange={(open) => {

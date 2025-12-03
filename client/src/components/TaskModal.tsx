@@ -10,10 +10,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useProject } from "@/contexts/ProjectContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Loader2, AlertTriangle, AlertCircle, User, Calendar, FileText, 
@@ -32,6 +35,7 @@ import { useTaskConversation, useCreateConversation } from "@/hooks/useConversat
 import { useAuth } from "@/hooks/useAuth";
 import { MessageSquare } from "lucide-react";
 import { TaskRaciTab } from "@/components/TaskRaciTab";
+import { TaskMaterialsTab } from "@/components/TaskMaterialsTab";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
 import { ResourceAssignmentCard } from "@/components/ResourceAssignmentCard";
 import type { ResourceTimeEntry } from "@shared/schema";
@@ -628,8 +632,8 @@ export function TaskModal({
     if (task) {
       updateMutation.mutate(result.data);
     } else {
-      if (options) {
-        setPendingAction(options);
+      if (options && options.action) {
+        setPendingAction(options as { action: 'recalculate' | 'switchTab', value?: string });
       }
       createMutation.mutate(result.data as InsertTask);
     }
@@ -1099,7 +1103,7 @@ export function TaskModal({
                           value={formData.status} 
                           onValueChange={(value: TaskStatus) => {
                             const today = new Date().toISOString().split('T')[0];
-                            const updates: Partial<TaskFormData> = { status: value };
+                            const updates: Partial<TaskUIState> = { status: value };
                             
                             if (value === 'in-progress' && !formData.actualStartDate) {
                               updates.actualStartDate = today;
@@ -1217,31 +1221,23 @@ export function TaskModal({
 
             <TabsContent value="schedule" className="space-y-6 mt-0 h-full">
               <div className="space-y-6">
-                {/* Info Legend */}
-                <div className="rounded-md bg-blue-50 dark:bg-blue-950 p-4 text-xs text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
-                  <p className="font-semibold mb-2">Understanding Dates in PMI & EPC Projects:</p>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="font-medium mb-1">Baseline vs Actual (What We Show):</p>
-                      <p className="pl-2">In PMI & EPC projects, we primarily track <strong>Baseline</strong> vs <strong>Actual</strong> dates.</p>
-                      <ul className="list-disc pl-6 mt-1 space-y-1">
-                        <li><strong>Baseline:</strong> The approved plan - these are the committed dates that serve as the tracking target.</li>
-                        <li><strong>Actual:</strong> The real dates when work actually started and finished.</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="font-medium mb-1">Planned Dates (Project Manager's Tool):</p>
-                      <p className="pl-2">Planned dates are used for calculation and planning:</p>
-                      <ul className="list-disc pl-6 mt-1 space-y-1">
-                        <li><strong>Manual:</strong> Set Planned Start & End dates directly.</li>
-                        <li><strong>Effort-Driven:</strong> Set Start date + Estimated Hours, then click <Activity className="h-3 w-3 inline mx-1"/> Recalculate Schedule to compute the end date based on resources, working days, and constraints.</li>
-                        <li><strong>Commit to Baseline:</strong> Once satisfied with the planned duration, click "Set Baseline" to commit the planned dates as the baseline (approved plan).</li>
-                      </ul>
-                    </div>
-                  </div>
+                {/* 1. Estimated Hours */}
+                <div className="space-y-2">
+                  <Label htmlFor="estimated-hours" className="text-sm font-semibold">Estimated Hours</Label>
+                  <Input
+                    id="estimated-hours"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.estimatedHours}
+                    onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
+                    data-testid="input-estimated-hours"
+                    className="max-w-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">Set estimated hours for effort-driven scheduling</p>
                 </div>
 
-                {/* Duration Information */}
+                {/* 2. Duration Information */}
                 {task && (
                   <div className="space-y-3 p-4 bg-accent/5 border border-accent/20 rounded-lg">
                     <h4 className="text-sm font-semibold flex items-center gap-2">
@@ -1281,136 +1277,130 @@ export function TaskModal({
                   </div>
                 )}
 
-                {/* Scheduling Fields */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="estimated-hours">Estimated Hours</Label>
-                      <Input
-                        id="estimated-hours"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.estimatedHours}
-                        onChange={(e) => setFormData({ ...formData, estimatedHours: e.target.value })}
-                        data-testid="input-estimated-hours"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="constraint-type">Constraint Type</Label>
-                      <Select 
-                        value={formData.constraintType} 
-                        onValueChange={(value) => setFormData({ ...formData, constraintType: value })}
-                      >
-                        <SelectTrigger id="constraint-type" data-testid="select-constraint-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CONSTRAINT_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Planned Schedule (Manual or Effort-Driven)</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="start-date" className="text-xs">Start</Label>
+                {/* 3. Planned Schedule (in colored box) */}
+                <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Planned Schedule (Manual or Effort-Driven)</Label>
+                    <div className="grid grid-cols-2 gap-4 max-w-md">
+                      <div className="space-y-1">
+                        <Label htmlFor="start-date" className="text-xs">Start</Label>
+                        <Input
+                          id="start-date"
+                          type="date"
+                          value={formData.startDate}
+                          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                          disabled={formData.progress === 100}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="end-date" className="text-xs">End</Label>
+                        <div className="relative">
                           <Input
-                            id="start-date"
+                            id="end-date"
                             type="date"
-                            value={formData.startDate}
-                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                            value={formData.endDate}
+                            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                             disabled={formData.progress === 100}
                             className="h-9"
                           />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="end-date" className="text-xs">End</Label>
-                          <div className="relative">
-                            <Input
-                              id="end-date"
-                              type="date"
-                              value={formData.endDate}
-                              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                              disabled={formData.progress === 100}
-                              className="h-9"
-                            />
-                            {/* Visual hint if estimated hours is set */}
-                            {formData.estimatedHours && !formData.endDate && (
-                              <span className="absolute right-2 top-2 text-[10px] text-muted-foreground italic">
-                                Auto-calc
-                              </span>
-                            )}
-                          </div>
+                          {/* Visual hint if estimated hours is set */}
+                          {formData.estimatedHours && !formData.endDate && (
+                            <span className="absolute right-2 top-2 text-[10px] text-muted-foreground italic">
+                              Auto-calc
+                            </span>
+                          )}
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="constraint-type" className="text-sm font-semibold">Constraint Type</Label>
+                    <Select 
+                      value={formData.constraintType} 
+                      onValueChange={(value) => setFormData({ ...formData, constraintType: value })}
+                    >
+                      <SelectTrigger id="constraint-type" data-testid="select-constraint-type" className="max-w-md">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONSTRAINT_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="mt-2 p-3 bg-green-100 dark:bg-green-900/30 rounded-md text-xs text-green-800 dark:text-green-200">
+                      <p className="font-semibold mb-1">How Constraints Work:</p>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li><strong>Constraints override planned dates</strong> when set to anything other than "As Soon As Possible"</li>
+                        <li><strong>Start constraints</strong> (MSO, SNET, SNLT) affect the planned start date</li>
+                        <li><strong>Finish constraints</strong> (MFO, FNET, FNLT) affect the planned finish date</li>
+                        <li>When a constraint date is set, it takes precedence over calculated dates</li>
+                        <li>Use "Set Baseline" to commit planned dates (including constraint effects) as the baseline</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
 
-                {/* Baseline and Actual Dates */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Baseline (Tracking Target)</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="baseline-start" className="text-xs">Start</Label>
-                        <Input
-                          id="baseline-start"
-                          type="date"
-                          value={formData.baselineStart}
-                          onChange={(e) => setFormData({ ...formData, baselineStart: e.target.value })}
-                          disabled={!!(task as any)?.baselineStart}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="baseline-finish" className="text-xs">Finish</Label>
-                        <Input
-                          id="baseline-finish"
-                          type="date"
-                          value={formData.baselineFinish}
-                          onChange={(e) => setFormData({ ...formData, baselineFinish: e.target.value })}
-                          disabled={!!(task as any)?.baselineFinish}
-                          className="h-9"
-                        />
-                      </div>
+                {/* 4. Baseline Dates */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Baseline (Tracking Target)</Label>
+                  <div className="grid grid-cols-2 gap-2 max-w-md">
+                    <div className="space-y-1">
+                      <Label htmlFor="baseline-start" className="text-xs">Start</Label>
+                      <Input
+                        id="baseline-start"
+                        type="date"
+                        value={formData.baselineStart}
+                        onChange={(e) => setFormData({ ...formData, baselineStart: e.target.value })}
+                        disabled={!!(task as any)?.baselineStart}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="baseline-finish" className="text-xs">Finish</Label>
+                      <Input
+                        id="baseline-finish"
+                        type="date"
+                        value={formData.baselineFinish}
+                        onChange={(e) => setFormData({ ...formData, baselineFinish: e.target.value })}
+                        disabled={!!(task as any)?.baselineFinish}
+                        className="h-9"
+                      />
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">Baseline dates are the approved plan. Use "Set Baseline" button to commit planned dates.</p>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Actual (Progress)</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="actual-start-date" className="text-xs">Start</Label>
-                        <Input
-                          id="actual-start-date"
-                          type="date"
-                          value={formData.actualStartDate}
-                          onChange={(e) => setFormData({ ...formData, actualStartDate: e.target.value })}
-                          disabled={formData.progress === 0}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="actual-finish-date" className="text-xs">Finish</Label>
-                        <Input
-                          id="actual-finish-date"
-                          type="date"
-                          value={formData.actualFinishDate}
-                          onChange={(e) => setFormData({ ...formData, actualFinishDate: e.target.value })}
-                          disabled={formData.progress < 100}
-                          className="h-9"
-                        />
-                      </div>
+                {/* 5. Actual Dates */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Actual (Progress)</Label>
+                  <div className="grid grid-cols-2 gap-2 max-w-md">
+                    <div className="space-y-1">
+                      <Label htmlFor="actual-start-date" className="text-xs">Start</Label>
+                      <Input
+                        id="actual-start-date"
+                        type="date"
+                        value={formData.actualStartDate}
+                        onChange={(e) => setFormData({ ...formData, actualStartDate: e.target.value })}
+                        disabled={formData.progress === 0}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="actual-finish-date" className="text-xs">Finish</Label>
+                      <Input
+                        id="actual-finish-date"
+                        type="date"
+                        value={formData.actualFinishDate}
+                        onChange={(e) => setFormData({ ...formData, actualFinishDate: e.target.value })}
+                        disabled={formData.progress < 100}
+                        className="h-9"
+                      />
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">Actual dates track when work really started and finished.</p>
                 </div>
               </div>
             </TabsContent>
@@ -1459,21 +1449,57 @@ export function TaskModal({
                       <div className="space-y-3 p-3 bg-accent/5 border border-accent/20 rounded-lg">
                         <div className="space-y-2">
                           <Label className="text-xs font-medium">Add Predecessor</Label>
-                          <Select value={selectedPredecessor} onValueChange={setSelectedPredecessor}>
-                            <SelectTrigger data-testid="select-predecessor" className="w-full">
-                              <SelectValue placeholder="Select a task..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableTasks
-                                .filter(t => !predecessors.some(p => p.predecessorId === t.id))
-                                .map((t) => (
-                                  <SelectItem key={t.id} value={t.id.toString()}>
-                                    <span className="font-mono text-xs">{t.wbsCode || `#${t.id}`}</span>
-                                    <span className="ml-2">{t.name}</span>
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between"
+                                data-testid="select-predecessor"
+                              >
+                                {selectedPredecessor
+                                  ? (() => {
+                                      const task = availableTasks.find(t => t.id.toString() === selectedPredecessor);
+                                      return task ? (
+                                        <>
+                                          <span className="font-mono text-xs">{task.wbsCode || `#${task.id}`}</span>
+                                          <span className="ml-2">{task.name}</span>
+                                        </>
+                                      ) : "Select a task..."
+                                    })()
+                                  : "Select a task..."}
+                                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search by task name or WBS code..." />
+                                <CommandList>
+                                  <CommandEmpty>No tasks found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {availableTasks
+                                      .filter(t => !predecessors.some(p => p.predecessorId === t.id))
+                                      .filter(t => {
+                                        // Filter will be handled by Command component's built-in search
+                                        return true;
+                                      })
+                                      .map((t) => (
+                                        <CommandItem
+                                          key={t.id}
+                                          value={`${t.wbsCode || `#${t.id}`} ${t.name}`}
+                                          onSelect={() => {
+                                            setSelectedPredecessor(t.id.toString());
+                                          }}
+                                        >
+                                          <span className="font-mono text-xs">{t.wbsCode || `#${t.id}`}</span>
+                                          <span className="ml-2">{t.name}</span>
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div className="flex gap-2">
                           <div className="flex-1">
@@ -1627,21 +1653,53 @@ export function TaskModal({
                       <div className="space-y-3 p-3 bg-accent/5 border border-accent/20 rounded-lg">
                         <div className="space-y-2">
                           <Label className="text-xs font-medium">Add Successor</Label>
-                          <Select value={selectedSuccessor} onValueChange={setSelectedSuccessor}>
-                            <SelectTrigger data-testid="select-successor" className="w-full">
-                              <SelectValue placeholder="Select a task..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableTasks
-                                .filter(t => !successors.some(s => s.successorId === t.id))
-                                .map((t) => (
-                                  <SelectItem key={t.id} value={t.id.toString()}>
-                                    <span className="font-mono text-xs">{t.wbsCode || `#${t.id}`}</span>
-                                    <span className="ml-2">{t.name}</span>
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between"
+                                data-testid="select-successor"
+                              >
+                                {selectedSuccessor
+                                  ? (() => {
+                                      const task = availableTasks.find(t => t.id.toString() === selectedSuccessor);
+                                      return task ? (
+                                        <>
+                                          <span className="font-mono text-xs">{task.wbsCode || `#${task.id}`}</span>
+                                          <span className="ml-2">{task.name}</span>
+                                        </>
+                                      ) : "Select a task..."
+                                    })()
+                                  : "Select a task..."}
+                                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search by task name or WBS code..." />
+                                <CommandList>
+                                  <CommandEmpty>No tasks found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {availableTasks
+                                      .filter(t => !successors.some(s => s.successorId === t.id))
+                                      .map((t) => (
+                                        <CommandItem
+                                          key={t.id}
+                                          value={`${t.wbsCode || `#${t.id}`} ${t.name}`}
+                                          onSelect={() => {
+                                            setSelectedSuccessor(t.id.toString());
+                                          }}
+                                        >
+                                          <span className="font-mono text-xs">{t.wbsCode || `#${t.id}`}</span>
+                                          <span className="ml-2">{t.name}</span>
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div className="flex gap-2">
                           <div className="flex-1">
@@ -2104,7 +2162,7 @@ export function TaskModal({
                         </Button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto">
+                      <div className="grid grid-cols-1 gap-2 max-h-[500px] overflow-y-auto">
                         {risks.filter(r => !linkedRiskIds.includes(r.id)).map((risk) => (
                           <Card key={risk.id} className="hover-elevate cursor-pointer" onClick={() => addRiskMutation.mutate(risk.id)}>
                             <CardContent className="p-3 flex items-center justify-between">
@@ -2410,11 +2468,20 @@ export function TaskModal({
 
 function TaskChatTab({ taskId }: { taskId: number }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: conversation, isLoading } = useTaskConversation(taskId);
   const createConversation = useCreateConversation();
+  const queryClient = useQueryClient();
 
   const handleCreateConversation = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please log in to start a conversation",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       await createConversation.mutateAsync({
@@ -2422,8 +2489,18 @@ function TaskChatTab({ taskId }: { taskId: number }) {
         taskId,
         participantIds: [user.id],
       });
-    } catch (error) {
+      
+      toast({
+        title: "Success",
+        description: "Conversation started! You can now send messages.",
+      });
+    } catch (error: any) {
       console.error("Failed to create task conversation:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to start conversation. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

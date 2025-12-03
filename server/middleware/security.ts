@@ -4,7 +4,7 @@
  */
 
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 
 /**
@@ -39,7 +39,7 @@ export function configureHelmet() {
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 500, // Increased from 100 to prevent 429 errors during normal usage
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
@@ -60,8 +60,13 @@ export const userApiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
-    // Use user ID if authenticated, fallback to IP
-    return (req as any).user?.id || req.ip || "anonymous";
+    // Use user ID if authenticated, fallback to IP using proper IPv6-safe helper
+    if ((req as any).user?.id) {
+      return String((req as any).user.id);
+    }
+    // Use ipKeyGenerator helper for IPv6-safe IP handling
+    // ipKeyGenerator takes an IP string (req.ip), not the Request object
+    return ipKeyGenerator(req.ip || "unknown");
   },
   skip: (req: Request) => {
     // Skip for health checks
@@ -193,6 +198,16 @@ export function sanitizeInput(req: Request, res: Response, next: NextFunction) {
  * Validate required environment variables on startup
  */
 export function validateEnvironmentVariables(): void {
+  // Generate a default SESSION_SECRET for development if not provided
+  if (!process.env.SESSION_SECRET && process.env.NODE_ENV === "development") {
+    const crypto = require("crypto");
+    process.env.SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+    console.warn(
+      "[SECURITY] SESSION_SECRET not set - generated a temporary one for development.\n" +
+      "⚠️  WARNING: This will change on every restart. Set SESSION_SECRET in .env for production."
+    );
+  }
+
   const required = [
     "DATABASE_URL",
     "SESSION_SECRET",

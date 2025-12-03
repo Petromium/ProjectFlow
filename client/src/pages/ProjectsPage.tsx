@@ -357,21 +357,7 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <DataTable
-            columns={columns}
-            data={projects}
-            searchKey="name"
-            searchPlaceholder="Search projects by name or code..."
-            enableSelection={true}
-            enableColumnVisibility={true}
-            enableExport={true}
-            enableSorting={true}
-            enableFiltering={true}
-            onSelectionChange={setSelectedProjects}
-            onExport={handleExport}
-            emptyMessage={projects.length === 0 ? "No projects yet. Create your first project!" : "No projects found."}
-            getRowId={(row) => row.id.toString()}
-          />
+          {/* Selection Toolbar - moved to top */}
           <SelectionToolbar
             selectedCount={selectedProjects.length}
             selectedItems={selectedProjects}
@@ -386,6 +372,23 @@ export default function ProjectsPage() {
                 variant: "destructive",
               },
             ]}
+          />
+          <DataTable
+            columns={columns}
+            data={projects}
+            searchKey="name"
+            searchPlaceholder="Search projects by name or code..."
+            enableSelection={true}
+            enableColumnVisibility={true}
+            enableExport={true}
+            enableSorting={true}
+            enableFiltering={true}
+            enablePagination={false}
+            maxHeight="calc(100vh - 400px)"
+            onSelectionChange={setSelectedProjects}
+            onExport={handleExport}
+            emptyMessage={projects.length === 0 ? "No projects yet. Create your first project!" : "No projects found."}
+            getRowId={(row) => row.id.toString()}
           />
         </div>
       )}

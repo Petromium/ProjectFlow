@@ -129,6 +129,76 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "update_task",
+      description: "Update an existing task's properties like estimatedHours, name, description, priority, status, dates, etc. Always set previewMode=true to show preview first.",
+      parameters: {
+        type: "object",
+        properties: {
+          taskId: { type: "number", description: "The task ID to update" },
+          changes: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+              estimatedHours: { type: "number", description: "Estimated hours for the task" },
+              actualHours: { type: "number" },
+              status: { type: "string", enum: ["not-started", "in-progress", "review", "completed", "on-hold"] },
+              priority: { type: "string", enum: ["low", "medium", "high", "critical"] },
+              startDate: { type: "string", format: "date-time" },
+              endDate: { type: "string", format: "date-time" },
+              progress: { type: "number", minimum: 0, maximum: 100 },
+            }
+          },
+          previewMode: { type: "boolean", default: true }
+        },
+        required: ["taskId", "changes"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "bulk_update_tasks",
+      description: "Update multiple tasks at once. Useful for updating estimatedHours for many tasks. Always set previewMode=true to show preview first. Parent task estimatedHours will be automatically calculated as sum of children if updateParentHours=true.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectId: { type: "number", description: "The project ID" },
+          updates: {
+            type: "array",
+            description: "Array of task updates",
+            items: {
+              type: "object",
+              properties: {
+                taskId: { type: "number" },
+                changes: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    description: { type: "string" },
+                    estimatedHours: { type: "number" },
+                    actualHours: { type: "number" },
+                    status: { type: "string", enum: ["not-started", "in-progress", "review", "completed", "on-hold"] },
+                    priority: { type: "string", enum: ["low", "medium", "high", "critical"] },
+                    startDate: { type: "string", format: "date-time" },
+                    endDate: { type: "string", format: "date-time" },
+                    progress: { type: "number", minimum: 0, maximum: 100 },
+                  }
+                }
+              },
+              required: ["taskId", "changes"]
+            }
+          },
+          updateParentHours: { type: "boolean", default: true, description: "If true, automatically calculate parent task estimatedHours as sum of children" },
+          previewMode: { type: "boolean", default: true }
+        },
+        required: ["projectId", "updates"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "create_risk",
       description: "Create a new risk in the project. Always set previewMode=true to show preview first.",
       parameters: {
@@ -545,13 +615,282 @@ export async function generatePreview(
       };
     }
 
+    case "update_task": {
+      const { taskId, changes } = args;
+      
+      // Verify task exists and user has access
+      const task = await storage.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+      await verifyProjectAccess(task.projectId, userId, storage);
+      
+      const changeList: ActionChange[] = [];
+      if (changes.name !== undefined) {
+        changeList.push({ field: 'name', oldValue: task.name, newValue: changes.name, type: 'modify' });
+      }
+      if (changes.description !== undefined) {
+        changeList.push({ field: 'description', oldValue: task.description || null, newValue: changes.description || null, type: 'modify' });
+      }
+      if (changes.estimatedHours !== undefined) {
+        changeList.push({ field: 'estimatedHours', oldValue: task.estimatedHours ? parseFloat(task.estimatedHours.toString()) : null, newValue: changes.estimatedHours, type: 'modify' });
+      }
+      if (changes.actualHours !== undefined) {
+        changeList.push({ field: 'actualHours', oldValue: task.actualHours ? parseFloat(task.actualHours.toString()) : null, newValue: changes.actualHours, type: 'modify' });
+      }
+      if (changes.status !== undefined) {
+        changeList.push({ field: 'status', oldValue: task.status, newValue: changes.status, type: 'modify' });
+      }
+      if (changes.priority !== undefined) {
+        changeList.push({ field: 'priority', oldValue: task.priority, newValue: changes.priority, type: 'modify' });
+      }
+      if (changes.startDate !== undefined) {
+        changeList.push({ field: 'startDate', oldValue: task.startDate || null, newValue: changes.startDate || null, type: 'modify' });
+      }
+      if (changes.endDate !== undefined) {
+        changeList.push({ field: 'endDate', oldValue: task.endDate || null, newValue: changes.endDate || null, type: 'modify' });
+      }
+      if (changes.progress !== undefined) {
+        changeList.push({ field: 'progress', oldValue: task.progress, newValue: changes.progress, type: 'modify' });
+      }
+      
+      return {
+        actionId,
+        type: 'update',
+        entity: 'task',
+        description: `Update task "${task.name}" (ID: ${taskId})`,
+        changes: changeList,
+        affectedIds: [taskId],
+        preview: {
+          taskId,
+          taskName: task.name,
+          wbsCode: task.wbsCode,
+          changes: changes,
+          currentValues: {
+            name: task.name,
+            description: task.description,
+            estimatedHours: task.estimatedHours ? parseFloat(task.estimatedHours.toString()) : null,
+            status: task.status,
+            priority: task.priority,
+          }
+        }
+      };
+    }
+
+    case "bulk_update_tasks": {
+      const { projectId, updates, updateParentHours } = args;
+      
+      // Verify project access
+      await verifyProjectAccess(projectId, userId, storage);
+      
+      // Get all tasks in project to build hierarchy
+      const allTasks = await storage.getTasksByProject(projectId);
+      const taskMap = new Map(allTasks.map(t => [t.id!, t]));
+      
+      const changeList: ActionChange[] = [];
+      const affectedTaskIds: number[] = [];
+      const taskUpdates: Array<{ taskId: number; taskName: string; wbsCode: string; changes: any; currentValues: any }> = [];
+      const warnings: string[] = [];
+      
+      // Process each update
+      for (const update of updates) {
+        const task = taskMap.get(update.taskId);
+        if (!task) {
+          warnings.push(`Task ${update.taskId} not found - skipping update`);
+          continue; // Skip missing tasks instead of throwing
+        }
+        
+        affectedTaskIds.push(update.taskId);
+        const taskChanges: any = {};
+        const currentValues: any = {
+          name: task.name,
+          estimatedHours: task.estimatedHours ? parseFloat(task.estimatedHours.toString()) : null,
+        };
+        
+        if (update.changes.name !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_name`, oldValue: task.name, newValue: update.changes.name, type: 'modify' });
+          taskChanges.name = update.changes.name;
+        }
+        if (update.changes.description !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_description`, oldValue: task.description || null, newValue: update.changes.description || null, type: 'modify' });
+          taskChanges.description = update.changes.description;
+        }
+        if (update.changes.estimatedHours !== undefined) {
+          const oldHours = task.estimatedHours ? parseFloat(task.estimatedHours.toString()) : null;
+          changeList.push({ field: `task_${update.taskId}_estimatedHours`, oldValue: oldHours, newValue: update.changes.estimatedHours, type: 'modify' });
+          taskChanges.estimatedHours = update.changes.estimatedHours;
+        }
+        if (update.changes.actualHours !== undefined) {
+          const oldHours = task.actualHours ? parseFloat(task.actualHours.toString()) : null;
+          changeList.push({ field: `task_${update.taskId}_actualHours`, oldValue: oldHours, newValue: update.changes.actualHours, type: 'modify' });
+          taskChanges.actualHours = update.changes.actualHours;
+        }
+        if (update.changes.status !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_status`, oldValue: task.status, newValue: update.changes.status, type: 'modify' });
+          taskChanges.status = update.changes.status;
+        }
+        if (update.changes.priority !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_priority`, oldValue: task.priority, newValue: update.changes.priority, type: 'modify' });
+          taskChanges.priority = update.changes.priority;
+        }
+        if (update.changes.startDate !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_startDate`, oldValue: task.startDate || null, newValue: update.changes.startDate || null, type: 'modify' });
+          taskChanges.startDate = update.changes.startDate;
+        }
+        if (update.changes.endDate !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_endDate`, oldValue: task.endDate || null, newValue: update.changes.endDate || null, type: 'modify' });
+          taskChanges.endDate = update.changes.endDate;
+        }
+        if (update.changes.progress !== undefined) {
+          changeList.push({ field: `task_${update.taskId}_progress`, oldValue: task.progress, newValue: update.changes.progress, type: 'modify' });
+          taskChanges.progress = update.changes.progress;
+        }
+        
+        taskUpdates.push({
+          taskId: update.taskId,
+          taskName: task.name,
+          wbsCode: task.wbsCode,
+          changes: taskChanges,
+          currentValues
+        });
+      }
+      
+      // Calculate parent task hours if requested
+      const parentUpdates: Array<{ taskId: number; taskName: string; wbsCode: string; newEstimatedHours: number }> = [];
+      if (updateParentHours) {
+        // Build parent-child map
+        const childrenByParent = new Map<number, typeof allTasks>();
+        for (const task of allTasks) {
+          if (task.parentId) {
+            if (!childrenByParent.has(task.parentId)) {
+              childrenByParent.set(task.parentId, []);
+            }
+            childrenByParent.get(task.parentId)!.push(task);
+          }
+        }
+        
+        // Calculate parent hours for all affected parents
+        const affectedParents = new Set<number>();
+        for (const update of updates) {
+          const task = taskMap.get(update.taskId);
+          if (task?.parentId) {
+            affectedParents.add(task.parentId);
+          }
+        }
+        
+        for (const parentId of Array.from(affectedParents)) {
+          const parent = taskMap.get(parentId);
+          if (!parent) continue;
+          
+          const children = childrenByParent.get(parentId) || [];
+          // Use updated hours from updates array if available, otherwise use current task hours
+          const childrenHours = children.map(child => {
+            const update = updates.find((u: { taskId: number }) => u.taskId === child.id);
+            if (update?.changes?.estimatedHours !== undefined) {
+              return update.changes.estimatedHours;
+            }
+            return child.estimatedHours ? parseFloat(child.estimatedHours.toString()) : 0;
+          });
+          
+          const totalHours = childrenHours.reduce((sum, hours) => sum + (hours || 0), 0);
+          const currentHours = parent.estimatedHours ? parseFloat(parent.estimatedHours.toString()) : 0;
+          
+          if (totalHours !== currentHours) {
+            parentUpdates.push({
+              taskId: parentId,
+              taskName: parent.name,
+              wbsCode: parent.wbsCode,
+              newEstimatedHours: totalHours
+            });
+            changeList.push({
+              field: `task_${parentId}_estimatedHours`,
+              oldValue: currentHours,
+              newValue: totalHours,
+              type: 'modify'
+            });
+            affectedTaskIds.push(parentId);
+          }
+        }
+      }
+      
+      // Combine warnings
+      const allWarnings: string[] = [];
+      if (warnings.length > 0) {
+        allWarnings.push(...warnings);
+      }
+      if (parentUpdates.length > 0) {
+        allWarnings.push(`${parentUpdates.length} parent task(s) will have estimatedHours updated to sum of children`);
+      }
+      
+      return {
+        actionId,
+        type: 'bulk',
+        entity: 'task',
+        description: `Update ${taskUpdates.length} task(s)${parentUpdates.length > 0 ? ` and ${parentUpdates.length} parent task(s)` : ''}${warnings.length > 0 ? ` (${warnings.length} task(s) skipped - not found)` : ''}`,
+        changes: changeList,
+        affectedIds: affectedTaskIds,
+        warnings: allWarnings.length > 0 ? allWarnings : undefined,
+        preview: {
+          taskUpdates,
+          parentUpdates: parentUpdates.length > 0 ? parentUpdates : undefined,
+          updateParentHours,
+          skippedTasks: warnings.length > 0 ? warnings : undefined
+        }
+      };
+    }
+
     default:
       throw new Error(`Preview not supported for function: ${name}`);
   }
 }
 
+// Helper function to generate WBS code for a task
+async function generateWbsCodeForTask(
+  storage: IStorage,
+  projectId: number,
+  parentId: number | null
+): Promise<string> {
+  // Get all tasks in the project
+  const allTasks = await storage.getTasksByProject(projectId);
+  
+  // Filter tasks with the same parent
+  const siblings = allTasks.filter(t => (t.parentId || null) === parentId);
+  
+  // Sort siblings by existing WBS code or creation order
+  siblings.sort((a, b) => {
+    if (a.wbsCode && b.wbsCode && a.wbsCode !== 'TBD' && b.wbsCode !== 'TBD') {
+      return a.wbsCode.localeCompare(b.wbsCode);
+    }
+    return (a.id || 0) - (b.id || 0);
+  });
+  
+  // If parent exists, get parent's WBS code
+  if (parentId) {
+    const parent = allTasks.find(t => t.id === parentId);
+    if (parent && parent.wbsCode && parent.wbsCode !== 'TBD') {
+      const nextIndex = siblings.length + 1;
+      return `${parent.wbsCode}.${nextIndex}`;
+    }
+  }
+  
+  // Root level: find the highest root-level number
+  const rootTasks = siblings.filter(t => !t.parentId);
+  const rootNumbers = rootTasks
+    .map(t => {
+      if (t.wbsCode && t.wbsCode !== 'TBD') {
+        const match = t.wbsCode.match(/^(\d+)/);
+        return match ? parseInt(match[1]) : 0;
+      }
+      return 0;
+    })
+    .filter(n => n > 0);
+  
+  const nextRootNumber = rootNumbers.length > 0 ? Math.max(...rootNumbers) + 1 : siblings.length + 1;
+  return `${nextRootNumber}`;
+}
+
 // Execute function calls
-async function executeFunctionCall(
+export async function executeFunctionCall(
   name: string,
   args: any,
   storage: IStorage,
@@ -582,7 +921,15 @@ async function executeFunctionCall(
           tasks: {
             total: tasks.length,
             byStatus: tasks.reduce((acc, t) => ({ ...acc, [t.status]: (acc[t.status as string] || 0) + 1 }), {} as Record<string, number>),
-            byPriority: tasks.reduce((acc, t) => ({ ...acc, [t.priority]: (acc[t.priority as string] || 0) + 1 }), {} as Record<string, number>)
+            byPriority: tasks.reduce((acc, t) => ({ ...acc, [t.priority]: (acc[t.priority as string] || 0) + 1 }), {} as Record<string, number>),
+            list: tasks.map(t => ({
+              id: t.id,
+              name: t.name,
+              wbsCode: t.wbsCode || `#${t.id}`,
+              status: t.status,
+              priority: t.priority,
+              estimatedHours: t.estimatedHours ? parseFloat(t.estimatedHours.toString()) : null
+            }))
           },
           risks: {
             total: risks.length,
@@ -679,13 +1026,145 @@ async function executeFunctionCall(
           endDate: args.endDate ? new Date(args.endDate) : null,
           progress: 0,
           parentId: null,
-          wbsCode: 'TBD',
+          wbsCode: await generateWbsCodeForTask(storage, args.projectId, null),
           actualHours: null,
           createdBy: userId
         };
 
         const task = await storage.createTask(taskData);
         return JSON.stringify({ success: true, task });
+      }
+
+      case "update_task": {
+        const { taskId, changes } = args;
+        
+        // Verify task exists and user has access
+        const task = await storage.getTask(taskId);
+        if (!task) {
+          throw new Error(`Task ${taskId} not found`);
+        }
+        await verifyProjectAccess(task.projectId, userId, storage);
+
+        // Build update data
+        const updateData: any = {};
+        if (changes.name !== undefined) updateData.name = changes.name;
+        if (changes.description !== undefined) updateData.description = changes.description || null;
+        if (changes.estimatedHours !== undefined) updateData.estimatedHours = changes.estimatedHours?.toString() || null;
+        if (changes.actualHours !== undefined) updateData.actualHours = changes.actualHours?.toString() || null;
+        if (changes.status !== undefined) updateData.status = changes.status;
+        if (changes.priority !== undefined) updateData.priority = changes.priority;
+        if (changes.startDate !== undefined) updateData.startDate = changes.startDate ? new Date(changes.startDate) : null;
+        if (changes.endDate !== undefined) updateData.endDate = changes.endDate ? new Date(changes.endDate) : null;
+        if (changes.progress !== undefined) updateData.progress = changes.progress;
+
+        const updated = await storage.updateTask(taskId, updateData);
+        return JSON.stringify({ success: true, task: updated });
+      }
+
+      case "bulk_update_tasks": {
+        const { projectId, updates, updateParentHours } = args;
+        
+        // Verify project access
+        await verifyProjectAccess(projectId, userId, storage);
+        
+        // Get all tasks in project to build hierarchy
+        const allTasks = await storage.getTasksByProject(projectId);
+        const taskMap = new Map(allTasks.map(t => [t.id!, t]));
+        
+        const updatedTasks: any[] = [];
+        const errors: Array<{ taskId: number; error: string }> = [];
+        
+        // Process each update
+        for (const update of updates) {
+          try {
+            const task = taskMap.get(update.taskId);
+            if (!task) {
+              errors.push({ taskId: update.taskId, error: "Task not found" });
+              continue;
+            }
+            
+            // Build update data
+            const updateData: any = {};
+            if (update.changes.name !== undefined) updateData.name = update.changes.name;
+            if (update.changes.description !== undefined) updateData.description = update.changes.description || null;
+            if (update.changes.estimatedHours !== undefined) updateData.estimatedHours = update.changes.estimatedHours?.toString() || null;
+            if (update.changes.actualHours !== undefined) updateData.actualHours = update.changes.actualHours?.toString() || null;
+            if (update.changes.status !== undefined) updateData.status = update.changes.status;
+            if (update.changes.priority !== undefined) updateData.priority = update.changes.priority;
+            if (update.changes.startDate !== undefined) updateData.startDate = update.changes.startDate ? new Date(update.changes.startDate) : null;
+            if (update.changes.endDate !== undefined) updateData.endDate = update.changes.endDate ? new Date(update.changes.endDate) : null;
+            if (update.changes.progress !== undefined) updateData.progress = update.changes.progress;
+            
+            const updated = await storage.updateTask(update.taskId, updateData);
+            updatedTasks.push(updated);
+            
+            // Update taskMap with new values for parent calculation
+            if (updated) {
+              taskMap.set(update.taskId, updated);
+            }
+          } catch (error) {
+            errors.push({ taskId: update.taskId, error: error instanceof Error ? error.message : String(error) });
+          }
+        }
+        
+        // Calculate and update parent task hours if requested
+        const parentUpdates: any[] = [];
+        if (updateParentHours) {
+          // Build parent-child map
+          const childrenByParent = new Map<number, typeof allTasks>();
+          for (const task of allTasks) {
+            if (task.parentId) {
+              if (!childrenByParent.has(task.parentId)) {
+                childrenByParent.set(task.parentId, []);
+              }
+              childrenByParent.get(task.parentId)!.push(task);
+            }
+          }
+          
+          // Find all affected parents
+          const affectedParents = new Set<number>();
+          for (const update of updates) {
+            const task = taskMap.get(update.taskId);
+            if (task?.parentId) {
+              affectedParents.add(task.parentId);
+            }
+          }
+          
+          // Update each affected parent
+          for (const parentId of Array.from(affectedParents)) {
+            const parent = taskMap.get(parentId);
+            if (!parent) continue;
+            
+            const children = childrenByParent.get(parentId) || [];
+            // Calculate sum of children hours (use updated values from taskMap)
+            const childrenHours = children.map(child => {
+              const updatedChild = taskMap.get(child.id!);
+              return updatedChild?.estimatedHours ? parseFloat(updatedChild.estimatedHours.toString()) : 0;
+            });
+            
+            const totalHours = childrenHours.reduce((sum, hours) => sum + (hours || 0), 0);
+            const currentHours = parent.estimatedHours ? parseFloat(parent.estimatedHours.toString()) : 0;
+            
+            if (totalHours !== currentHours) {
+              const updated = await storage.updateTask(parentId, {
+                estimatedHours: totalHours.toString()
+              });
+              if (updated) {
+                parentUpdates.push(updated);
+                taskMap.set(parentId, updated);
+              }
+            }
+          }
+        }
+        
+        return JSON.stringify({
+          success: true,
+          updatedTasks: updatedTasks.length,
+          parentUpdates: parentUpdates.length,
+          tasks: updatedTasks,
+          parentTasks: parentUpdates,
+          errors: errors.length > 0 ? errors : undefined
+        });
       }
 
       case "create_risk": {
@@ -926,7 +1405,7 @@ async function executeFunctionCall(
               status: 'not-started',
               progress: 0,
               parentId,
-              wbsCode: 'TBD',
+              wbsCode: await generateWbsCodeForTask(storage, project.id, parentId),
               actualHours: null,
               createdBy: userId
             });

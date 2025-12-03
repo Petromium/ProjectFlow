@@ -36,6 +36,24 @@ import { TemplateSelector } from "./TemplateSelector";
 import { TemplatePreview } from "./TemplatePreview";
 import { CreateProjectAIStep } from "./CreateProjectAIStep";
 
+// Component to handle navigation to AI Assistant for project creation
+function AICreateProjectRedirect({ 
+  organizationId, 
+  onClose,
+  navigate 
+}: { 
+  organizationId: number; 
+  onClose: () => void;
+  navigate: (path: string) => void;
+}) {
+  useEffect(() => {
+    onClose();
+    navigate(`/ai-assistant?mode=create-project&orgId=${organizationId}`);
+  }, [organizationId, onClose, navigate]);
+  
+  return null;
+}
+
 // Extend shared schema for UI specific needs (e.g. optional code for templates)
 const projectSchema = insertProjectSchema.extend({
   name: z.string().min(1, "Name is required"),
@@ -421,17 +439,11 @@ export function CreateProjectWizard({ open, onOpenChange }: CreateProjectWizardP
         )}
 
         {step === 2 && method === 'ai' && selectedOrgId && (
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-            <CreateProjectAIStep
-              organizationId={selectedOrgId}
-              onBack={handleBack}
-              onCancel={() => onOpenChange(false)}
-              onProjectCreated={(projectId) => {
-                onOpenChange(false);
-                navigate(`/projects/${projectId}`);
-              }}
-            />
-          </div>
+          <AICreateProjectRedirect 
+            organizationId={selectedOrgId}
+            onClose={() => onOpenChange(false)}
+            navigate={navigate}
+          />
         )}
       </DialogContent>
     </Dialog>

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,9 @@ import {
   DollarSign, Percent, MoreHorizontal, Pencil, Trash2, Eye,
   BarChart3, List, Users
 } from "lucide-react";
+import { DataTable, SortableHeader } from "@/components/ui/data-table";
+import { SelectionToolbar } from "@/components/ui/selection-toolbar";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,8 +60,8 @@ export default function ResourcesPage() {
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<ResourceGroup | null>(null);
-  const [selectedResourceIds, setSelectedResourceIds] = useState<number[]>([]);
-  const [viewMode, setViewMode] = useState<"list" | "groups">("list");
+  const [selectedResources, setSelectedResources] = useState<Resource[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   const { data: resources = [], isLoading } = useQuery<Resource[]>({
     queryKey: [`/api/projects/${selectedProjectId}/resources`],
@@ -122,15 +126,176 @@ export default function ResourcesPage() {
     return disciplineConfig?.label || discipline;
   };
 
-  const resourcesByType = RESOURCE_TYPES.map(type => ({
-    ...type,
-    resources: resources.filter(r => r.type === type.value),
-  }));
-
   const totalResources = resources.length;
   const avgAvailability = resources.length > 0 
     ? Math.round(resources.reduce((sum, r) => sum + r.availability, 0) / resources.length)
     : 0;
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map(id => apiRequest("DELETE", `/api/resources/${id}`)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${selectedProjectId}/resources`] });
+      setBulkDeleteDialogOpen(false);
+      setSelectedResources([]);
+      toast({ title: "Success", description: `${selectedResources.length} resource(s) deleted successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete resources", variant: "destructive" });
+    },
+  });
+
+  const handleBulkAction = (action: string, items: Resource[]) => {
+    if (action === "add-to-group") {
+      setSelectedGroup(null);
+      setGroupModalOpen(true);
+    } else if (action === "delete") {
+      setBulkDeleteDialogOpen(true);
+    }
+  };
+
+  // Define columns
+  const columns = useMemo<ColumnDef<Resource>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Name</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const resource = row.original;
+          const TypeIcon = getTypeIcon(resource.type);
+          return (
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                <TypeIcon className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{resource.name}</span>
+                  {resource.pricingModels && Array.isArray(resource.pricingModels) && resource.pricingModels.length > 1 && (
+                    <Badge variant="outline" className="text-xs">
+                      Tiered Pricing
+                    </Badge>
+                  )}
+                </div>
+                {resource.vendorName && (
+                  <div className="text-xs text-muted-foreground">Vendor: {resource.vendorName}</div>
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "type",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Type</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const resource = row.original;
+          const TypeIcon = getTypeIcon(resource.type);
+          return (
+            <div className="flex items-center gap-2">
+              <TypeIcon className="h-4 w-4 text-muted-foreground" />
+              <Badge variant="secondary" className="capitalize">
+                {getTypeLabel(resource.type)}
+              </Badge>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "discipline",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Discipline</SortableHeader>
+        ),
+        cell: ({ row }) => (
+          <Badge variant="outline" className="text-xs">
+            {getDisciplineLabel(row.original.discipline)}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "availability",
+        header: ({ column }) => (
+          <SortableHeader column={column}>Availability</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const availability = row.original.availability;
+          return (
+            <div className="flex items-center gap-2 min-w-[120px]">
+              <Progress value={availability} className="w-16 h-2" />
+              <span className="text-sm font-mono w-12 text-right">{availability}%</span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "rate",
+        header: "Rate/Cost",
+        cell: ({ row }) => {
+          const resource = row.original;
+          if (!resource.rate && !resource.costPerHour) {
+            return <span className="text-muted-foreground">-</span>;
+          }
+          const rate = parseFloat(resource.rate || resource.costPerHour || "0");
+          return (
+            <div className="text-right">
+              <div className="font-mono text-sm flex items-center justify-end gap-1">
+                <DollarSign className="h-3 w-3" />
+                {rate.toFixed(2)}
+                {resource.rateType === "per-hour" && "/hr"}
+                {resource.rateType === "per-use" && "/use"}
+                {resource.rateType === "per-unit" && `/${resource.unitType || "unit"}`}
+                {!resource.rateType && "/hr"}
+              </div>
+              <div className="text-xs text-muted-foreground">{resource.currency}</div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => {
+          const resource = row.original;
+          return (
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleOpenDetails(resource)}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleOpenEdit(resource)}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-destructive"
+                    onClick={() => handleDelete(resource)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   if (!selectedProjectId) {
     return (
@@ -161,18 +326,6 @@ export default function ResourcesPage() {
           <p className="text-muted-foreground">Manage project resources and assignments</p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedResourceIds.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedGroup(null);
-                setGroupModalOpen(true);
-              }}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Add to Group ({selectedResourceIds.length})
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={() => {
@@ -207,200 +360,126 @@ export default function ResourcesPage() {
         </TabsList>
 
         <TabsContent value="list" className="space-y-6">
+          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalResources}</p>
-                <p className="text-sm text-muted-foreground">Total Resources</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {resources.filter(r => r.type === "human").length}
-                </p>
-                <p className="text-sm text-muted-foreground">Human Resources</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                <Wrench className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">
-                  {resources.filter(r => r.type === "equipment").length}
-                </p>
-                <p className="text-sm text-muted-foreground">Equipment</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                <Percent className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{avgAvailability}%</p>
-                <p className="text-sm text-muted-foreground">Avg Availability</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {resources.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold mb-2">No Resources Yet</h2>
-            <p className="text-muted-foreground mb-4">
-              Add resources like team members, equipment, or materials to manage your project.
-            </p>
-            <Button onClick={handleOpenCreate} data-testid="button-add-first-resource">
-              <Plus className="h-4 w-4 mr-2" />
-              Add First Resource
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {resourcesByType.filter(g => g.resources.length > 0).map((group) => {
-            const Icon = group.icon;
-            return (
-              <Card key={group.value}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Icon className="h-5 w-5" />
-                    {group.label} ({group.resources.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {group.resources.map((resource) => {
-                      const TypeIcon = getTypeIcon(resource.type);
-                      return (
-                        <div 
-                          key={resource.id}
-                          className={cn(
-                            "flex items-center justify-between p-4 rounded-lg border hover-elevate cursor-pointer",
-                            selectedResourceIds.includes(resource.id) && "bg-primary/5 border-primary"
-                          )}
-                          data-testid={`resource-row-${resource.id}`}
-                          onClick={(e) => {
-                            if (e.target instanceof HTMLElement && e.target.closest('button')) return;
-                            setSelectedResourceIds(prev =>
-                              prev.includes(resource.id)
-                                ? prev.filter(id => id !== resource.id)
-                                : [...prev, resource.id]
-                            );
-                          }}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "h-10 w-10 rounded-full bg-muted flex items-center justify-center",
-                              selectedResourceIds.includes(resource.id) && "bg-primary/20"
-                            )}>
-                              <TypeIcon className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium">{resource.name}</p>
-                                <Badge variant="secondary" className="text-xs">
-                                  {getDisciplineLabel(resource.discipline)}
-                                </Badge>
-                                {resource.pricingTierEnabled && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Tiered Pricing
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {getTypeLabel(resource.type)}
-                                {resource.vendorName && ` • Vendor: ${resource.vendorName}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-6">
-                            <div className="text-center">
-                              <div className="flex items-center gap-2">
-                                <Progress value={resource.availability} className="w-20 h-2" />
-                                <span className="text-sm font-mono">{resource.availability}%</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">Availability</p>
-                            </div>
-
-                            {(resource.rate || resource.costPerHour) && (
-                              <div className="text-right">
-                                <p className="font-mono text-sm flex items-center gap-1">
-                                  <DollarSign className="h-3 w-3" />
-                                  {parseFloat(resource.rate || resource.costPerHour || "0").toFixed(2)}
-                                  {resource.rateType === "per-hour" && "/hr"}
-                                  {resource.rateType === "per-use" && "/use"}
-                                  {resource.rateType === "per-unit" && `/${resource.unitType || "unit"}`}
-                                  {!resource.rateType && "/hr"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">{resource.currency}</p>
-                              </div>
-                            )}
-
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" data-testid={`button-resource-actions-${resource.id}`}>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleOpenDetails(resource)}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleOpenEdit(resource)}>
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-destructive"
-                                  onClick={() => handleDelete(resource)}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      );
-                    })}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-5 w-5 text-primary" />
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                  <div>
+                    <p className="text-2xl font-bold">{totalResources}</p>
+                    <p className="text-sm text-muted-foreground">Total Resources</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <User className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {resources.filter(r => r.type === "human").length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Human Resources</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Wrench className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {resources.filter(r => r.type === "equipment").length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Equipment</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <Percent className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{avgAvailability}%</p>
+                    <p className="text-sm text-muted-foreground">Avg Availability</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Resources Table */}
+          {resources.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h2 className="text-xl font-semibold mb-2">No Resources Yet</h2>
+                <p className="text-muted-foreground mb-4">
+                  Add resources like team members, equipment, or materials to manage your project.
+                </p>
+                <Button onClick={handleOpenCreate} data-testid="button-add-first-resource">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Resource
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Selection Toolbar - moved to top */}
+              <SelectionToolbar
+                selectedCount={selectedResources.length}
+                selectedItems={selectedResources}
+                onClearSelection={() => setSelectedResources([])}
+                onBulkAction={handleBulkAction}
+                position="sticky"
+                bulkActions={[
+                  {
+                    label: "Add to Group",
+                    action: "add-to-group",
+                    icon: <Users className="h-4 w-4" />,
+                    variant: "default",
+                  },
+                  {
+                    label: "Delete Selected",
+                    action: "delete",
+                    icon: <Trash2 className="h-4 w-4" />,
+                    variant: "destructive",
+                  },
+                ]}
+              />
+              <DataTable
+                columns={columns}
+                data={resources}
+                searchKey="name"
+                searchPlaceholder="Search resources by name, type, or discipline..."
+                enableSelection={true}
+                enableColumnVisibility={true}
+                enableExport={true}
+                enableSorting={true}
+                enableFiltering={true}
+                enablePagination={false}
+                maxHeight="calc(100vh - 500px)"
+                onSelectionChange={setSelectedResources}
+                emptyMessage={resources.length === 0 ? "No resources yet. Add your first resource!" : "No resources found."}
+                getRowId={(row) => row.id.toString()}
+              />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="materials">
@@ -426,16 +505,46 @@ export default function ResourcesPage() {
 
       <ResourceGroupModal
         projectId={selectedProjectId || 0}
-        group={selectedGroup}
+        group={selectedGroup || undefined}
         open={groupModalOpen}
         onOpenChange={(open) => {
           setGroupModalOpen(open);
           if (!open) {
             setSelectedGroup(null);
-            setSelectedResourceIds([]);
+            setSelectedResources([]);
           }
         }}
       />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Resources</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedResources.length} selected resource(s)? This action cannot be undone.
+              <br /><br />
+              <strong>Resources to delete:</strong>
+              <ul className="list-disc list-inside mt-2 max-h-32 overflow-y-auto">
+                {selectedResources.map(r => <li key={r.id}>{r.name} ({getTypeLabel(r.type)})</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const ids = selectedResources.map(r => r.id);
+                bulkDeleteMutation.mutate(ids);
+              }}
+              className="bg-destructive text-destructive-foreground"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedResources.length} Resource(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

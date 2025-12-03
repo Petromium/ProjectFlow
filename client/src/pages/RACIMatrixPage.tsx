@@ -43,8 +43,13 @@ import {
   Check,
   X,
   User,
-  Briefcase
+  Briefcase,
+  Download,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
+import { useLocation } from "wouter";
+import Papa from "papaparse";
 import type { Task, Stakeholder, StakeholderRaci, Resource } from "@shared/schema";
 
 type RaciRole = "R" | "A" | "C" | "I";
@@ -250,8 +255,10 @@ function PersonMultiSelect({
 export default function RACIMatrixPage() {
   const { selectedProject } = useProject();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+  const [showHorizontalScrollHint, setShowHorizontalScrollHint] = useState(true);
 
   const projectId = selectedProject?.id;
 
@@ -491,6 +498,72 @@ export default function RACIMatrixPage() {
     setExpandedTasks(new Set());
   }, []);
 
+  // Export RACI matrix to CSV
+  const handleExportCSV = useCallback(() => {
+    if (!selectedProject) {
+      toast({
+        title: "Error",
+        description: "No project selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Build flat list of all tasks with their RACI assignments
+    const exportData: Array<{
+      "WBS Code": string;
+      "Task Name": string;
+      "Level": number;
+      "Responsible": string;
+      "Accountable": string;
+      "Consulted": string;
+      "Informed": string;
+      "Inherited": string;
+    }> = [];
+
+    const buildExportRow = (task: Task, level: number) => {
+      const { people: responsible, isInherited: rInherited } = getAssignedPeople(task.id, "R");
+      const { people: accountable, isInherited: aInherited } = getAssignedPeople(task.id, "A");
+      const { people: consulted, isInherited: cInherited } = getAssignedPeople(task.id, "C");
+      const { people: informed, isInherited: iInherited } = getAssignedPeople(task.id, "I");
+
+      exportData.push({
+        "WBS Code": task.wbsCode || `#${task.id}`,
+        "Task Name": task.name,
+        "Level": level,
+        "Responsible": responsible.map(p => p.name).join("; ") || "",
+        "Accountable": accountable.map(p => p.name).join("; ") || "",
+        "Consulted": consulted.map(p => p.name).join("; ") || "",
+        "Informed": informed.map(p => p.name).join("; ") || "",
+        "Inherited": [rInherited && "R", aInherited && "A", cInherited && "C", iInherited && "I"]
+          .filter(Boolean).join(", ") || "None",
+      });
+
+      // Recursively add children
+      const children = getChildren(task.id);
+      children.forEach(child => buildExportRow(child, level + 1));
+    };
+
+    rootTasks.forEach(task => buildExportRow(task, 0));
+
+    const csv = Papa.unparse(exportData);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${selectedProject.code || "project"}_raci_matrix_${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Success",
+      description: "RACI Matrix exported successfully",
+    });
+  }, [selectedProject, rootTasks, getAssignedPeople, getChildren, toast]);
+
   // Render a single task row
   const renderTaskRow = (task: Task, level: number = 0) => {
     const children = getChildren(task.id);
@@ -641,6 +714,10 @@ export default function RACIMatrixPage() {
         <Button variant="outline" size="sm" onClick={collapseAll} data-testid="button-collapse-all">
           Collapse All
         </Button>
+        <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
       {/* RACI Matrix Grid */}
@@ -661,8 +738,30 @@ export default function RACIMatrixPage() {
             <div className="p-6">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  No stakeholders or resources found. Add people to this project before creating RACI assignments.
+                <AlertDescription className="space-y-4">
+                  <div>
+                    No stakeholders or resources found. Add people to this project before creating RACI assignments.
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => navigate("/stakeholders")}
+                      className="gap-2"
+                    >
+                      <Users className="h-4 w-4" />
+                      Add Stakeholders
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate("/resources")}
+                      className="gap-2"
+                    >
+                      <Briefcase className="h-4 w-4" />
+                      Add Resources
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
             </div>
@@ -676,36 +775,53 @@ export default function RACIMatrixPage() {
               </Alert>
             </div>
           ) : (
-            <ScrollArea className="max-h-[600px]">
-              <div className="min-w-[700px]">
-                {/* Header row */}
-                <div className="grid grid-cols-[minmax(250px,2fr),repeat(4,minmax(120px,1fr))] gap-2 items-center py-3 px-3 bg-muted/50 border-b sticky top-0 z-10">
-                  <div className="font-medium text-sm">WBS / Task</div>
-                  {RACI_COLUMNS.map((col) => (
-                    <TooltipProvider key={col.key}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center gap-1 cursor-help">
-                            <div className={`h-5 w-5 rounded flex items-center justify-center font-bold text-[10px] ${col.color}`}>
-                              {col.key}
+            <div className="relative">
+              {/* Horizontal scroll hint */}
+              {showHorizontalScrollHint && (
+                <div className="absolute top-2 right-2 z-20 flex items-center gap-2 bg-background/95 backdrop-blur-sm border rounded-md px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+                  <ChevronsRight className="h-3 w-3 animate-pulse" />
+                  <span>Scroll horizontally to see all columns</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-4 p-0 ml-1"
+                    onClick={() => setShowHorizontalScrollHint(false)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              <ScrollArea className="h-[calc(100vh-400px)]">
+                <div className="min-w-[700px]">
+                  {/* Header row - sticky during horizontal scroll */}
+                  <div className="grid grid-cols-[minmax(250px,2fr),repeat(4,minmax(120px,1fr))] gap-2 items-center py-3 px-3 bg-muted/50 border-b sticky top-0 z-10 backdrop-blur-sm">
+                    <div className="font-medium text-sm">WBS / Task</div>
+                    {RACI_COLUMNS.map((col) => (
+                      <TooltipProvider key={col.key}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center justify-center gap-1 cursor-help">
+                              <div className={`h-5 w-5 rounded flex items-center justify-center font-bold text-[10px] ${col.color}`}>
+                                {col.key}
+                              </div>
+                              <span className="font-medium text-xs">{col.label}</span>
                             </div>
-                            <span className="font-medium text-xs">{col.label}</span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-sm">{col.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-sm">{col.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
+                  </div>
 
-                {/* Task rows */}
-                <div>
-                  {rootTasks.map(task => renderTaskRow(task, 0))}
+                  {/* Task rows */}
+                  <div>
+                    {rootTasks.map(task => renderTaskRow(task, 0))}
+                  </div>
                 </div>
-              </div>
-            </ScrollArea>
+              </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>

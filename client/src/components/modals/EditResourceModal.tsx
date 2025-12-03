@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useProject } from "@/contexts/ProjectContext";
 import { insertResourceSchema } from "@shared/schema";
 import type { Resource, InsertResource } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 interface EditResourceModalProps {
   resource: Resource | null;
@@ -128,9 +129,32 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
   const { toast } = useToast();
   const isEditing = !!resource;
 
+  // Map resource type tabs to actual types
+  const getTypeFromTab = (tab: string) => {
+    switch (tab) {
+      case "workers": return "human";
+      case "services": return "equipment";
+      case "materials": return "material";
+      default: return "human";
+    }
+  };
+
+  const getTabFromType = (type: string) => {
+    switch (type) {
+      case "human": return "workers";
+      case "equipment": return "services";
+      case "material": return "materials";
+      default: return "workers";
+    }
+  };
+
+  const [resourceTypeTab, setResourceTypeTab] = useState<string>(() => 
+    resource ? getTabFromType(resource.type) : "workers"
+  );
+
   const [formData, setFormData] = useState({
     name: "",
-    type: "human",
+    type: resource?.type || "human",
     discipline: "general",
     availability: 100,
     availabilityStatus: "available",
@@ -433,13 +457,53 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
         </p>
 
         <ScrollArea className="h-[65vh]">
+          {/* Top-level Resource Type Tabs */}
+          <div className="mb-4">
+            <Tabs value={resourceTypeTab} onValueChange={(value) => {
+              setResourceTypeTab(value);
+              const newType = getTypeFromTab(value);
+              setFormData({ ...formData, type: newType });
+              // Auto-set rate type based on resource type
+              if (newType === "material") {
+                setFormData(prev => ({ ...prev, type: newType, rateType: "per-unit" }));
+              } else if (newType === "human") {
+                setFormData(prev => ({ ...prev, type: newType, rateType: "per-hour" }));
+              } else {
+                setFormData(prev => ({ ...prev, type: newType, rateType: "per-use" }));
+              }
+            }}>
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="workers" data-testid="tab-resource-type-workers">
+                  <User className="h-4 w-4 mr-2" />
+                  Workers
+                </TabsTrigger>
+                <TabsTrigger value="services" data-testid="tab-resource-type-services">
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Services
+                </TabsTrigger>
+                <TabsTrigger value="materials" data-testid="tab-resource-type-materials">
+                  <Package className="h-4 w-4 mr-2" />
+                  Materials
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Bottom-level Detail Tabs */}
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className={cn(
+              "grid w-full",
+              formData.type === "human" ? "grid-cols-5" : "grid-cols-3"
+            )}>
               <TabsTrigger value="basic" data-testid="tab-basic">Basic</TabsTrigger>
               <TabsTrigger value="pricing" data-testid="tab-pricing">Pricing</TabsTrigger>
-              <TabsTrigger value="skills" data-testid="tab-skills">Skills</TabsTrigger>
+              {formData.type === "human" && (
+                <TabsTrigger value="skills" data-testid="tab-skills">Skills</TabsTrigger>
+              )}
               <TabsTrigger value="contract" data-testid="tab-contract">Contract</TabsTrigger>
-              <TabsTrigger value="capacity" data-testid="tab-capacity">Capacity</TabsTrigger>
+              {formData.type === "human" && (
+                <TabsTrigger value="capacity" data-testid="tab-capacity">Capacity</TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="basic" className="mt-4 space-y-4">
@@ -457,21 +521,12 @@ export function EditResourceModal({ resource, open, onOpenChange, onSuccess }: E
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
-                    <SelectTrigger data-testid="select-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RESOURCE_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center gap-2">
-                            <type.icon className="h-4 w-4" />
-                            {type.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="p-2 rounded-md bg-muted text-sm">
+                    {RESOURCE_TYPES.find(t => t.value === formData.type)?.label || "Unknown"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Change type using the tabs above
+                  </p>
                 </div>
 
                 <div className="space-y-2">

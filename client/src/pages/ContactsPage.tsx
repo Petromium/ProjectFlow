@@ -464,22 +464,7 @@ export default function ContactsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <DataTable
-              columns={columns}
-              data={contacts}
-              searchKey="name"
-              searchPlaceholder="Search contacts by name, email, or company..."
-              enableSelection={true}
-              enableColumnVisibility={true}
-              enableExport={true}
-              enableSorting={true}
-              enableFiltering={true}
-              onSelectionChange={setSelectedContacts}
-              onExport={handleExport}
-              emptyMessage="No contacts found"
-              getRowId={(row) => row.id.toString()}
-            />
-            {/* Selection Toolbar */}
+            {/* Selection Toolbar - moved to top */}
             <SelectionToolbar
               selectedCount={selectedContacts.length}
               selectedItems={selectedContacts}
@@ -506,6 +491,23 @@ export default function ContactsPage() {
                   variant: "outline",
                 },
               ]}
+            />
+            <DataTable
+              columns={columns}
+              data={contacts}
+              searchKey="name"
+              searchPlaceholder="Search contacts by name, email, or company..."
+              enableSelection={true}
+              enableColumnVisibility={true}
+              enableExport={true}
+              enableSorting={true}
+              enableFiltering={true}
+              enablePagination={false}
+              maxHeight="calc(100vh - 400px)"
+              onSelectionChange={setSelectedContacts}
+              onExport={handleExport}
+              emptyMessage="No contacts found"
+              getRowId={(row) => row.id.toString()}
             />
           </div>
         )}

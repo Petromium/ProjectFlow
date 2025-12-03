@@ -1015,7 +1015,17 @@ async function chatWithGemini(
   systemContent: string,
   storage: IStorage,
   userId: string,
-  modelName: string = DEFAULT_GEMINI_MODEL
+  modelName: string = DEFAULT_GEMINI_MODEL,
+  context?: {
+    currentPage?: string;
+    selectedTaskId?: number;
+    selectedRiskId?: number;
+    selectedIssueId?: number;
+    selectedResourceId?: number;
+    selectedItemIds?: number[];
+    modelName?: string;
+    organizationId?: number;
+  }
 ): Promise<ChatResponse> {
   if (!geminiClient) {
     throw new Error("Gemini API not initialized - GEMINI_API_KEY not set");
@@ -1079,7 +1089,11 @@ async function chatWithGemini(
 
       // Handle function calls loop (multi-step reasoning)
       while (response.candidates?.[0]?.content?.parts?.some((p: any) => p.functionCall)) {
-        const parts = response.candidates[0].content.parts;
+        const parts = response.candidates?.[0]?.content?.parts;
+        if (!parts) {
+          logger.warn("[Gemini API] No parts found in response");
+          break;
+        }
         const functionCallPart = parts.find((p: any) => p.functionCall);
 
         if (functionCallPart && functionCallPart.functionCall) {
@@ -1103,7 +1117,7 @@ async function chatWithGemini(
           functionCallsExecuted.push({ name, args: enrichedArgs, result: executionResult });
 
           // Send result back to model using function response format
-          const result = await chat.sendMessage({
+          const functionResponse = await chat.sendMessage({
             message: [{
               functionResponse: {
                 name: name,
@@ -1112,8 +1126,8 @@ async function chatWithGemini(
             }]
           });
           
-          response = result;
-          totalTokens += result.usageMetadata?.totalTokenCount || 0;
+          response = functionResponse;
+          totalTokens += functionResponse.usageMetadata?.totalTokenCount || 0;
         } else {
           break;
         }

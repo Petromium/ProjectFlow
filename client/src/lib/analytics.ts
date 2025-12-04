@@ -35,16 +35,7 @@ export const initGA = () => {
 };
 
 // Track page views - useful for single-page applications
-export const trackPageView = (url: string) => {
-  if (typeof window === 'undefined' || !window.gtag) return;
-  
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
-  if (!measurementId) return;
-  
-  window.gtag('config', measurementId, {
-    page_path: url
-  });
-};
+// Note: Enhanced version with title parameter is defined below
 
 // Track events
 export const trackEvent = (

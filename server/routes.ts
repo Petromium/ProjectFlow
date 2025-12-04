@@ -133,6 +133,23 @@ async function checkProjectAccess(userId: string, projectId: number): Promise<bo
   return await checkOrganizationAccess(userId, project.organizationId);
 }
 
+// Admin middleware - check if user is platform admin
+const isAdmin = async (req: any, res: Response, next: Function) => {
+  try {
+    const userId = getUserId(req);
+    const user = await storage.getUser(userId);
+
+    if (!user || !user.isSystemAdmin) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Admin auth error:", error);
+    res.status(500).json({ message: "Authentication error" });
+  }
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -9149,23 +9166,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ===== Admin Routes =====
-  // Admin middleware - check if user is platform admin
-  const isAdmin = async (req: any, res: Response, next: Function) => {
-    try {
-      const userId = getUserId(req);
-      const user = await storage.getUser(userId);
-
-      if (!user || !user.isSystemAdmin) {
-        return res.status(403).json({ message: "Admin access required" });
-      }
-
-      next();
-    } catch (error) {
-      console.error("Admin auth error:", error);
-      res.status(500).json({ message: "Authentication error" });
-    }
-  };
 
   app.get('/api/admin/stats', isAuthenticated, isAdmin, async (req: any, res) => {
     try {

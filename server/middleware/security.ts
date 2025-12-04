@@ -239,8 +239,11 @@ export function validateEnvironmentVariables(): void {
   }
 
   if (process.env.SESSION_SECRET) {
-    if (process.env.SESSION_SECRET.length < 32) {
-      invalid.push('SESSION_SECRET must be at least 32 characters long');
+    // In production, require 32+ characters. In development, allow shorter for testing
+    if (process.env.NODE_ENV === 'production' && process.env.SESSION_SECRET.length < 32) {
+      invalid.push('SESSION_SECRET must be at least 32 characters long in production');
+    } else if (process.env.NODE_ENV !== 'production' && process.env.SESSION_SECRET.length < 16) {
+      invalid.push('SESSION_SECRET must be at least 16 characters long');
     }
   }
 
@@ -298,8 +301,11 @@ export function validateEnvironmentVariables(): void {
   }
 
   if (process.env.SESSION_SECRET) {
-    if (process.env.SESSION_SECRET.length < 32) {
-      throw new Error('SESSION_SECRET must be at least 32 characters long');
+    // In production, require 32+ characters. In development, allow shorter for testing
+    if (process.env.NODE_ENV === 'production' && process.env.SESSION_SECRET.length < 32) {
+      throw new Error('SESSION_SECRET must be at least 32 characters long in production');
+    } else if (process.env.NODE_ENV !== 'production' && process.env.SESSION_SECRET.length < 16) {
+      throw new Error('SESSION_SECRET must be at least 16 characters long');
     }
   }
 

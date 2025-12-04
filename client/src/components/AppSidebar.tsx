@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Contact,
   FolderKanban,
+  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -56,6 +57,7 @@ const pmoTabs = [
   { title: "Projects", icon: FolderKanban, path: "/pmo/projects" },
   { title: "Contacts", icon: Contact, path: "/pmo/contacts" },
   { title: "Calendar", icon: Calendar, path: "/pmo/calendar" },
+  { title: "Lessons Learned", icon: BookOpen, path: "/pmo/lessons" },
   { title: "Inventory", icon: Package, path: "/pmo/inventory" },
   { title: "Settings", icon: Settings, path: "/settings" },
 ];

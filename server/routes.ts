@@ -75,6 +75,8 @@ import {
   insertContactLogSchema,
   insertUserInvitationSchema,
   updateUserOrganizationSchema
+  insertLessonLearnedSchema,
+  updateLessonLearnedSchema,
 } from "@shared/schema";
 import { chatWithAssistant, type ChatMessage } from "./aiAssistant";
 import { z } from "zod";
@@ -1450,6 +1452,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project:", error);
       res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  // ===== Lessons Learned Routes =====
+  app.get('/api/organizations/:orgId/lessons', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const lessons = await storage.getLessonsLearnedByOrganization(orgId);
+      res.json(lessons);
+    } catch (error) {
+      console.error("Error fetching organization lessons:", error);
+      res.status(500).json({ message: "Failed to fetch lessons" });
+    }
+  });
+
+  app.get('/api/organizations/:orgId/lessons/search', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+      const query = req.query.q as string;
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!query) {
+        return res.status(400).json({ message: "Query parameter required" });
+      }
+
+      const lessons = await storage.searchLessonsLearned(orgId, query);
+      res.json(lessons);
+    } catch (error) {
+      console.error("Error searching lessons:", error);
+      res.status(500).json({ message: "Failed to search lessons" });
+    }
+  });
+
+  app.get('/api/projects/:projectId/lessons', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = parseInt(req.params.projectId);
+
+      if (!await checkProjectAccess(userId, projectId)) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const lessons = await storage.getLessonsLearnedByProject(projectId);
+      res.json(lessons);
+    } catch (error) {
+      console.error("Error fetching project lessons:", error);
+      res.status(500).json({ message: "Failed to fetch lessons" });
+    }
+  });
+
+  app.post('/api/organizations/:orgId/lessons', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const orgId = parseInt(req.params.orgId);
+
+      if (!await checkOrganizationAccess(userId, orgId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const data = insertLessonLearnedSchema.parse(req.body);
+      // Ensure orgId matches
+      if (data.organizationId !== orgId) {
+        return res.status(400).json({ message: "Organization ID mismatch" });
+      }
+
+      // Try to attach creator
+      const userIdInt = parseInt(userId);
+      if (!isNaN(userIdInt)) {
+        // @ts-ignore - We know it matches schema if parsed
+        data.createdBy = userIdInt;
+      }
+
+      const lesson = await storage.createLessonLearned(data);
+      res.json(lesson);
+    } catch (error) {
+      console.error("Error creating lesson learned:", error);
+      res.status(400).json({ message: "Failed to create lesson learned" });
+    }
+  });
+
+  app.patch('/api/lessons/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+
+      const lesson = await storage.getLessonLearned(id);
+      if (!lesson) {
+        return res.status(404).json({ message: "Lesson not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, lesson.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const data = updateLessonLearnedSchema.parse(req.body);
+      const updated = await storage.updateLessonLearned(id, data);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating lesson learned:", error);
+      res.status(400).json({ message: "Failed to update lesson learned" });
+    }
+  });
+
+  app.delete('/api/lessons/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+
+      const lesson = await storage.getLessonLearned(id);
+      if (!lesson) {
+        return res.status(404).json({ message: "Lesson not found" });
+      }
+
+      if (!await checkOrganizationAccess(userId, lesson.organizationId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      await storage.deleteLessonLearned(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting lesson learned:", error);
+      res.status(500).json({ message: "Failed to delete lesson learned" });
     }
   });
 

@@ -46,6 +46,7 @@ import PMOCalendarPage from "@/pages/PMOCalendarPage";
 import PMOInventoryPage from "@/pages/PMOInventoryPage";
 import ProjectsPage from "@/pages/ProjectsPage";
 import ProgramsPage from "@/pages/ProgramsPage";
+import LessonsLearnedPage from "@/pages/LessonsLearnedPage";
 import ChatPage from "@/pages/ChatPage";
 import ContactsPage from "@/pages/ContactsPage";
 import ChangeRequestsPage from "@/pages/ChangeRequestsPage";
@@ -90,6 +91,7 @@ function Router() {
       <Route path="/pmo/programs" component={ProgramsPage} />
       <Route path="/pmo/projects" component={ProjectsPage} />
       <Route path="/pmo/contacts" component={ContactsPage} />
+      <Route path="/pmo/lessons" component={LessonsLearnedPage} />
       <Route path="/pmo/calendar" component={PMOCalendarPage} />
       <Route path="/pmo/inventory" component={PMOInventoryPage} />
       <Route path="/admin" component={AdminDashboard} />

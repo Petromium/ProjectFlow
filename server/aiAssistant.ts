@@ -73,6 +73,21 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_lessons_learned",
+      description: "Search the organization's Lessons Learned knowledge base. Use this to find past solutions, risks, and best practices before suggesting actions.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: { type: "number", description: "The organization ID" },
+          query: { type: "string", description: "Search query (e.g., 'concrete', 'vendor delay', 'safety audit')" }
+        },
+        required: ["organizationId", "query"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "analyze_project_risks",
       description: "Analyze project risks and provide risk assessment with high-priority items",
       parameters: {
@@ -989,6 +1004,31 @@ export async function executeFunctionCall(
         });
       }
 
+      case "search_lessons_learned": {
+        const { organizationId, query } = args;
+        // Verify access (using getUserOrganization directly as getOrganization doesn't check user access)
+        const userOrg = await storage.getUserOrganization(userId, organizationId);
+        if (!userOrg) {
+          throw new Error(`Access denied to organization ${organizationId}`);
+        }
+
+        const lessons = await storage.searchLessonsLearned(organizationId, query);
+        return JSON.stringify({
+          query,
+          count: lessons.length,
+          lessons: lessons.map(l => ({
+            title: l.title,
+            category: l.category,
+            description: l.description,
+            rootCause: l.rootCause,
+            actionTaken: l.actionTaken,
+            outcome: l.outcome,
+            impactRating: l.impactRating,
+            tags: l.tags
+          }))
+        });
+      }
+
       case "analyze_project_risks": {
         const { projectId } = args;
         // Verify access
@@ -1627,7 +1667,7 @@ async function chatWithGemini(
           // Inject organizationId from context if available and function needs it
           // This ensures AI doesn't need to ask for organizationId
           const enrichedArgs = { ...args };
-          if (name === "create_project_from_ai" && context?.organizationId && !enrichedArgs.organizationId) {
+          if ((name === "create_project_from_ai" || name === "search_lessons_learned") && context?.organizationId && !enrichedArgs.organizationId) {
             enrichedArgs.organizationId = context.organizationId;
           }
           
@@ -1737,6 +1777,10 @@ export async function chatWithAssistant(
   }
 
   // Build context description
+  if (context?.organizationId) {
+    contextParts.push(`Organization ID: ${context.organizationId} (use for searching lessons learned)`);
+  }
+  
   const contextParts: string[] = [];
   if (projectId) {
     contextParts.push(`Current project: Project ID ${projectId}`);
@@ -1766,6 +1810,10 @@ You help project managers with:
 - Identifying performance issues and bottlenecks
 - Creating and managing project items (tasks, risks, issues, resources)
 - Providing actionable insights and recommendations
+- **Leveraging Organizational Knowledge:** You have access to the organization's "Lessons Learned" database. 
+  - BEFORE suggesting solutions to complex problems or creating risk registers, ALWAYS search for relevant lessons learned using 'search_lessons_learned'.
+  - If a user reports a problem (e.g., "concrete cracking"), search for it first to see if it happened before.
+  - When creating projects or plans, check for lessons related to similar project types.
 
 **IMPORTANT: Terminology**
 This organization uses custom terminology:

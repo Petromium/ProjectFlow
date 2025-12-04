@@ -130,6 +130,9 @@ import type {
   UpdateUserOrganization,
   InsertProjectTemplate,
   ProjectTemplate,
+  InsertLessonLearned,
+  LessonLearned,
+  UpdateLessonLearned,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -169,6 +172,15 @@ export interface IStorage {
   unassignTag(tagId: number, entityType: string, entityId: number): Promise<void>;
   unassignAllTagsFromEntity(entityType: string, entityId: number): Promise<void>;
   getTagsForEntity(entityType: string, entityId: number): Promise<Tag[]>;
+
+  // Lessons Learned
+  getLessonLearned(id: number): Promise<LessonLearned | undefined>;
+  getLessonsLearnedByOrganization(organizationId: number): Promise<LessonLearned[]>;
+  getLessonsLearnedByProject(projectId: number): Promise<LessonLearned[]>;
+  searchLessonsLearned(organizationId: number, query: string): Promise<LessonLearned[]>;
+  createLessonLearned(lesson: InsertLessonLearned): Promise<LessonLearned>;
+  updateLessonLearned(id: number, lesson: Partial<UpdateLessonLearned>): Promise<LessonLearned | undefined>;
+  deleteLessonLearned(id: number): Promise<void>;
 
   // Users (Replit Auth compatible)
   getUser(id: string): Promise<User | undefined>;
@@ -3787,6 +3799,65 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.aiActionLogs.id, id))
       .returning();
     return updated;
+  }
+
+  // ==================== Lessons Learned ====================
+  async getLessonLearned(id: number): Promise<schema.LessonLearned | undefined> {
+    const [lesson] = await db.select().from(schema.lessonsLearned)
+      .where(eq(schema.lessonsLearned.id, id));
+    return lesson;
+  }
+
+  async getLessonsLearnedByOrganization(organizationId: number): Promise<schema.LessonLearned[]> {
+    return await db.select().from(schema.lessonsLearned)
+      .where(eq(schema.lessonsLearned.organizationId, organizationId))
+      .orderBy(desc(schema.lessonsLearned.createdAt));
+  }
+
+  async getLessonsLearnedByProject(projectId: number): Promise<schema.LessonLearned[]> {
+    return await db.select().from(schema.lessonsLearned)
+      .where(eq(schema.lessonsLearned.projectId, projectId))
+      .orderBy(desc(schema.lessonsLearned.createdAt));
+  }
+
+  async searchLessonsLearned(organizationId: number, query: string): Promise<schema.LessonLearned[]> {
+    // Basic search implementation using ILIKE on title, description, and tags
+    // In a production environment, this should be replaced with full-text search or vector search
+    return await db.select().from(schema.lessonsLearned)
+      .where(
+        and(
+          eq(schema.lessonsLearned.organizationId, organizationId),
+          sql`(
+            ${schema.lessonsLearned.title} ILIKE ${`%${query}%`} OR
+            ${schema.lessonsLearned.description} ILIKE ${`%${query}%`} OR
+            ${schema.lessonsLearned.rootCause} ILIKE ${`%${query}%`} OR
+            exists(
+              select 1 
+              from unnest(${schema.lessonsLearned.tags}) as t 
+              where t ILIKE ${`%${query}%`}
+            )
+          )`
+        )
+      )
+      .orderBy(desc(schema.lessonsLearned.createdAt))
+      .limit(20);
+  }
+
+  async createLessonLearned(lesson: schema.InsertLessonLearned): Promise<schema.LessonLearned> {
+    const [created] = await db.insert(schema.lessonsLearned).values(lesson).returning();
+    return created;
+  }
+
+  async updateLessonLearned(id: number, lesson: Partial<schema.UpdateLessonLearned>): Promise<schema.LessonLearned | undefined> {
+    const [updated] = await db.update(schema.lessonsLearned)
+      .set({ ...lesson, updatedAt: new Date() })
+      .where(eq(schema.lessonsLearned.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteLessonLearned(id: number): Promise<void> {
+    await db.delete(schema.lessonsLearned).where(eq(schema.lessonsLearned.id, id));
   }
 
   async updateAiActionLogByActionId(actionId: string, log: Partial<schema.UpdateAiActionLog>): Promise<schema.AiActionLog | undefined> {

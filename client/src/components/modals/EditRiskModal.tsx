@@ -13,6 +13,8 @@ import { useProject } from "@/contexts/ProjectContext";
 import type { Risk, InsertRisk } from "@shared/schema";
 import { insertRiskSchema } from "@shared/schema";
 import { TagInput } from "@/components/ui/tag-input";
+import { RiskSuggestions } from "@/components/RiskSuggestions";
+import type { LessonLearned } from "@shared/schema";
 
 interface EditRiskModalProps {
   risk: Risk | null;
@@ -158,11 +160,24 @@ export function EditRiskModal({ risk, open, onOpenChange, onSuccess }: EditRiskM
     }
   };
 
+  const handleApplySuggestion = (lesson: LessonLearned) => {
+    setFormData(prev => ({
+      ...prev,
+      mitigationPlan: (prev.mitigationPlan ? prev.mitigationPlan + "\n\n" : "") + 
+        `[Based on Lesson Learned: ${lesson.title}]\nRecommendation: ${lesson.outcome || lesson.actionTaken}`,
+      description: (prev.description ? prev.description : "") || lesson.description,
+    }));
+    toast({
+      title: "Suggestion Applied",
+      description: "Risk details updated from Lesson Learned.",
+    });
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -178,6 +193,10 @@ export function EditRiskModal({ risk, open, onOpenChange, onSuccess }: EditRiskM
               placeholder="Risk title"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            />
+            <RiskSuggestions 
+              titleQuery={formData.title || ""} 
+              onApplySuggestion={handleApplySuggestion} 
             />
           </div>
 

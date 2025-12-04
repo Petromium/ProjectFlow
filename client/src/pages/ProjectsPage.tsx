@@ -27,7 +27,6 @@ import { DataTable, SortableHeader } from "@/components/ui/data-table";
 import Papa from "papaparse";
 import { useSelection } from "@/contexts/SelectionContext";
 import { registerBulkActionHandler } from "@/components/BottomSelectionToolbar";
-import { useQuery } from "@tanstack/react-query";
 import type { Tag } from "@shared/schema";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

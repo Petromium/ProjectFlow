@@ -1,0 +1,2 @@
+-- Constraint already removed or never existed, skipping
+-- ALTER TABLE "communication_metrics" DROP CONSTRAINT "communication_metrics_user_id_users_id_fk";

@@ -157,7 +157,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Ensure we have a valid host - fallback to localhost:5000 if window.location.host is undefined
+    const host = window.location.host || "localhost:5000";
+    const wsUrl = `${protocol}//${host}/ws`;
 
     console.log("[WS] Connecting to:", wsUrl);
     const ws = new WebSocket(wsUrl);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 export default function LoginPage() {
   const { isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -41,11 +42,14 @@ export default function LoginPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      if (data?.user) {
+        queryClient.setQueryData(["/api/auth/user"], data.user);
+      }
       if (data.requires2FA) {
         setRequires2FA(true);
         setError(null);
       } else {
-        setLocation("/");
+        window.location.href = "/";
       }
     },
     onError: (error: Error) => {
@@ -58,8 +62,11 @@ export default function LoginPage() {
       const response = await apiRequest("POST", "/api/auth/verify-2fa", { code });
       return response.json();
     },
-    onSuccess: () => {
-      setLocation("/");
+    onSuccess: (data) => {
+      if (data?.user) {
+        queryClient.setQueryData(["/api/auth/user"], data.user);
+      }
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       setError(error.message || "Invalid 2FA code");

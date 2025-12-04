@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { tasks, taskDependencies, resourceAssignments, resources } from "@shared/schema";
+import { tasks, resourceAssignments, resources } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import type { Task, TaskDependency, Resource, ResourceAssignment } from "@shared/schema";
+import type { Task, Resource, ResourceAssignment } from "@shared/schema";
+import * as schema from "@shared/schema";
 
 interface ScheduleTask {
   id: number;
@@ -279,8 +280,8 @@ export class SchedulingService {
     
     // Fetch all dependencies
     const dependencies = await db.select()
-      .from(taskDependencies)
-      .where(eq(taskDependencies.projectId, projectId));
+      .from(schema.taskDependencies)
+      .where(eq(schema.taskDependencies.projectId, projectId));
     
     // Build schedule task map
     const taskMap = new Map<number, ScheduleTask>();
@@ -675,8 +676,8 @@ export class SchedulingService {
       .where(eq(tasks.projectId, projectId));
     
     const dependencies = await db.select()
-      .from(taskDependencies)
-      .where(eq(taskDependencies.projectId, projectId));
+      .from(schema.taskDependencies)
+      .where(eq(schema.taskDependencies.projectId, projectId));
     
     return projectTasks.map(task => {
       const predecessors = dependencies
@@ -719,8 +720,8 @@ export class SchedulingService {
       .where(eq(tasks.projectId, projectId));
     
     const dependencies = await db.select()
-      .from(taskDependencies)
-      .where(eq(taskDependencies.projectId, projectId));
+      .from(schema.taskDependencies)
+      .where(eq(schema.taskDependencies.projectId, projectId));
     
     const taskIds = projectTasks.map(t => t.id);
     const resourceAssignmentsList = taskIds.length > 0

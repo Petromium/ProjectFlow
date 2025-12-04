@@ -5,39 +5,64 @@ import { relations } from "drizzle-orm";
 
 // Existing tables
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+  id: varchar("id", { length: 100 }).primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
-  password: text("password").notNull(),
-  fullName: varchar("full_name", { length: 100 }).notNull(),
-  role: varchar("role", { length: 50 }).default("user").notNull(),
-  organizationId: integer("organization_id"), // Will be foreign key after organizations table defined
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  profileImageUrl: text("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }),
+  googleId: varchar("google_id", { length: 255 }),
+  emailVerified: boolean("email_verified").default(false),
+  emailVerificationToken: varchar("email_verification_token", { length: 255 }),
+  emailVerificationExpires: timestamp("email_verification_expires"),
+  passwordResetToken: varchar("password_reset_token", { length: 255 }),
+  passwordResetExpires: timestamp("password_reset_expires"),
+  totpSecret: varchar("totp_secret", { length: 255 }),
+  totpEnabled: boolean("totp_enabled").default(false),
+  backupCodes: text("backup_codes"),
+  lastLoginAt: timestamp("last_login_at"),
 });
 
 export const organizations = pgTable("organizations", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 100 }).notNull(),
+  name: text("name").notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
-  ownerId: integer("owner_id").notNull().references(() => users.id),
-  logoUrl: text("logo_url"), // URL to stored logo image
-  topLevelEntityLabel: varchar("top_level_entity_label", { length: 50 }).default("Organization"),
-  programEntityLabel: varchar("program_entity_label", { length: 50 }).default("Program"),
-  topLevelEntityLabelCustom: varchar("top_level_entity_label_custom", { length: 50 }),
-  programEntityLabelCustom: varchar("program_entity_label_custom", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  currency: varchar("currency", { length: 10 }),
+  logoUrl: text("logo_url"),
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  postalCode: varchar("postal_code", { length: 20 }),
+  country: varchar("country", { length: 100 }),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }),
+  website: varchar("website", { length: 255 }),
+  taxId: varchar("tax_id", { length: 100 }),
+  registrationNumber: varchar("registration_number", { length: 100 }),
+  topLevelEntityLabel: varchar("top_level_entity_label", { length: 50 }).default("Organization"),
+  topLevelEntityLabelCustom: varchar("top_level_entity_label_custom", { length: 50 }),
+  programEntityLabel: varchar("program_entity_label", { length: 50 }).default("Program"),
+  programEntityLabelCustom: varchar("program_entity_label_custom", { length: 50 }),
 });
 
-// Add self-reference to users table for organizationId
-// Note: Circular dependency resolution usually handled at runtime or by altering table later
-// For this schema definition, we'll just assume the field exists on users.
+export const userOrganizations = pgTable("user_organizations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 100 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  role: text("role").default("member").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  managerId: integer("manager_id").references(() => users.id),
+  managerId: varchar("manager_id", { length: 100 }).references(() => users.id),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   status: varchar("status", { length: 20 }).default("active"),
@@ -312,6 +337,37 @@ export const lessonsLearned = pgTable("lessons_learned", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Documents table (schema placeholder – align with actual DB structure)
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }),
+  fileUrl: text("file_url"),
+  fileType: varchar("file_type", { length: 50 }),
+  sizeBytes: integer("size_bytes"),
+  uploadedBy: varchar("uploaded_by", { length: 100 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Notification rules (schema placeholder – align with actual DB structure)
+export const notificationRules = pgTable("notification_rules", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 150 }).notNull(),
+  description: text("description"),
+  eventType: varchar("event_type", { length: 50 }), // e.g., "task-overdue"
+  condition: jsonb("condition"),
+  recipients: jsonb("recipients").$type<number[]>().default([]),
+  channel: varchar("channel", { length: 20 }).default("email"),
+  enabled: boolean("enabled").default(true),
+  createdBy: varchar("created_by", { length: 100 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Zod Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const insertProjectSchema = createInsertSchema(projects);
@@ -322,6 +378,9 @@ export const insertStakeholderSchema = createInsertSchema(stakeholders);
 export const insertCostItemSchema = createInsertSchema(costItems);
 export const insertOrganizationSchema = createInsertSchema(organizations);
 export const insertProgramSchema = createInsertSchema(programs);
+export const insertResourceSchema = createInsertSchema(resources);
+export const insertDocumentSchema = createInsertSchema(documents);
+export const insertNotificationRuleSchema = createInsertSchema(notificationRules);
 
 // Tags Zod Schemas
 export const insertTagSchema = createInsertSchema(tags).omit({ 
@@ -346,14 +405,16 @@ export const updateLessonLearnedSchema = insertLessonLearnedSchema.partial();
 
 // Communication Metrics Zod Schemas
 export const insertCommunicationMetricsSchema = createInsertSchema(communicationMetrics).omit({
-  id: true,
-  createdAt: true,
+  id: true, 
+  createdAt: true, 
   updatedAt: true
 });
 export const updateCommunicationMetricsSchema = insertCommunicationMetricsSchema.partial();
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type UserOrganization = typeof userOrganizations.$inferSelect;
+export type InsertUserOrganization = typeof userOrganizations.$inferInsert;
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
 export type Program = typeof programs.$inferSelect;
@@ -391,3 +452,11 @@ export type UpdateLessonLearned = z.infer<typeof updateLessonLearnedSchema>;
 export type CommunicationMetrics = typeof communicationMetrics.$inferSelect;
 export type InsertCommunicationMetrics = z.infer<typeof insertCommunicationMetricsSchema>;
 export type UpdateCommunicationMetrics = z.infer<typeof updateCommunicationMetricsSchema>;
+
+// Document Types
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = typeof documents.$inferInsert;
+
+// Notification Rule Types
+export type NotificationRule = typeof notificationRules.$inferSelect;
+export type InsertNotificationRule = typeof notificationRules.$inferInsert;

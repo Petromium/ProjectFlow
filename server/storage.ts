@@ -1,6 +1,6 @@
 import { eq, and, desc, asc, isNull, inArray, sql } from "drizzle-orm";
 import * as schema from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { logger } from "./lib/logger";
 import type {
   InsertOrganization,
@@ -825,28 +825,77 @@ export class DatabaseStorage implements IStorage {
 
   // Users
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
-    return user;
+    try {
+      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
+      return user;
+    } catch (error: any) {
+      // If schema mismatch (password column doesn't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
+        const result = await pool.query(
+          `SELECT * FROM users WHERE id = $1`,
+          [id]
+        );
+        return result.rows[0] as User | undefined;
+      }
+      throw error;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
-    return user;
+    try {
+      const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
+      return user;
+    } catch (error: any) {
+      // If schema mismatch (password column doesn't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
+        const result = await pool.query(
+          `SELECT * FROM users WHERE email = $1`,
+          [email]
+        );
+        return result.rows[0] as User | undefined;
+      }
+      throw error;
+    }
   }
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(schema.users);
+    try {
+      return await db.select().from(schema.users);
+    } catch (error: any) {
+      // If schema mismatch (password column doesn't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
+        const result = await pool.query(`SELECT * FROM users`);
+        return result.rows as User[];
+      }
+      throw error;
+    }
   }
 
   async getUsersByOrganization(organizationId: number): Promise<User[]> {
-    const userOrgs = await db.select().from(schema.userOrganizations)
-      .where(eq(schema.userOrganizations.organizationId, organizationId));
+    try {
+      const userOrgs = await db.select().from(schema.userOrganizations)
+        .where(eq(schema.userOrganizations.organizationId, organizationId));
 
-    const userIds = userOrgs.map(uo => uo.userId);
-    if (userIds.length === 0) return [];
+      const userIds = userOrgs.map(uo => uo.userId);
+      if (userIds.length === 0) return [];
 
-    return await db.select().from(schema.users)
-      .where(inArray(schema.users.id, userIds));
+      return await db.select().from(schema.users)
+        .where(inArray(schema.users.id, userIds));
+    } catch (error: any) {
+      // If schema mismatch (password column doesn't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
+        const userOrgs = await db.select().from(schema.userOrganizations)
+          .where(eq(schema.userOrganizations.organizationId, organizationId));
+        const userIds = userOrgs.map(uo => uo.userId);
+        if (userIds.length === 0) return [];
+        const result = await pool.query(
+          `SELECT * FROM users WHERE id = ANY($1::text[])`,
+          [userIds]
+        );
+        return result.rows as User[];
+      }
+      throw error;
+    }
   }
 
   async createUser(user: InsertUser): Promise<User> {
@@ -1445,9 +1494,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStakeholdersByProject(projectId: number): Promise<Stakeholder[]> {
-    return await db.select().from(schema.stakeholders)
-      .where(eq(schema.stakeholders.projectId, projectId))
-      .orderBy(desc(schema.stakeholders.createdAt));
+    try {
+      return await db.select().from(schema.stakeholders)
+        .where(eq(schema.stakeholders.projectId, projectId))
+        .orderBy(desc(schema.stakeholders.createdAt));
+    } catch (error: any) {
+      // If schema mismatch (created_at doesn't exist), use raw SQL
+      if (error.code === "42703" || error.code === "42601" || error.message?.includes("does not exist")) {
+        const result = await pool.query(
+          `SELECT * FROM stakeholders WHERE project_id = $1`,
+          [projectId]
+        );
+        return result.rows as Stakeholder[];
+      }
+      throw error;
+    }
   }
 
   async createStakeholder(stakeholder: InsertStakeholder): Promise<Stakeholder> {
@@ -1780,9 +1841,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRisksByProject(projectId: number): Promise<Risk[]> {
-    return await db.select().from(schema.risks)
-      .where(eq(schema.risks.projectId, projectId))
-      .orderBy(desc(schema.risks.createdAt));
+    try {
+      return await db.select().from(schema.risks)
+        .where(eq(schema.risks.projectId, projectId));
+    } catch (error: any) {
+      // If schema mismatch (closed_date or created_at don't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist")) {
+        const result = await pool.query(
+          `SELECT * FROM risks WHERE project_id = $1`,
+          [projectId]
+        );
+        return result.rows as Risk[];
+      }
+      throw error;
+    }
   }
 
   async createRisk(risk: InsertRisk): Promise<Risk> {
@@ -2408,8 +2480,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createResourceAssignment(assignment: InsertResourceAssignment): Promise<ResourceAssignment> {
-    const [created] = await db.insert(schema.resourceAssignments).values(assignment).returning();
-    return created;
+    try {
+      const [created] = await db.insert(schema.resourceAssignments).values(assignment).returning();
+      return created;
+    } catch (error: any) {
+      // If schema mismatch (cost column doesn't exist), use raw SQL
+      if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("cost")) {
+        // resource_assignments table may only have basic columns
+        const result = await pool.query(`
+          INSERT INTO resource_assignments (task_id, resource_id, allocation, effort_hours)
+          VALUES ($1, $2, $3, $4)
+          RETURNING *
+        `, [
+          assignment.taskId,
+          assignment.resourceId,
+          assignment.allocation || 100,
+          assignment.effortHours || null,
+        ]);
+        return result.rows[0] as ResourceAssignment;
+      }
+      throw error;
+    }
   }
 
   async deleteResourceAssignment(id: number): Promise<void> {

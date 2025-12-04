@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, inArray, sql, ne } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import { db, pool } from "./db";
 import { logger } from "./lib/logger";
@@ -98,6 +98,8 @@ import type {
   InsertOrganizationSubscription,
   AiUsageSummary,
   InsertAiUsageSummary,
+  CustomDashboard,
+  InsertCustomDashboard,
   InsertDocument,
   Document,
   InsertProjectEvent,
@@ -138,6 +140,8 @@ import type {
   UpdateCommunicationMetrics,
   InsertPushSubscription,
   PushSubscription,
+  CustomDashboard,
+  InsertCustomDashboard,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -506,6 +510,7 @@ export interface IStorage {
   // AI Usage Summary
   getAiUsageSummary(organizationId: number, month: string): Promise<AiUsageSummary | undefined>;
   incrementAiUsage(organizationId: number, tokensUsed: number): Promise<AiUsageSummary>;
+  getOrganizationUsage(organizationId: number): Promise<{ storageUsedBytes: number, aiTokensUsed: number, emailsSent: number }>;
 
   // Cloud Storage Connections
   getCloudStorageConnections(organizationId: number): Promise<CloudStorageConnection[]>;
@@ -842,6 +847,9 @@ export class DatabaseStorage implements IStorage {
       const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
       return user;
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
+      // If verification passes, remove this try-catch and use Drizzle ORM only
       // If schema mismatch (password column doesn't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
         const result = await pool.query(
@@ -859,6 +867,8 @@ export class DatabaseStorage implements IStorage {
       const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
       return user;
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (password column doesn't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
         const result = await pool.query(
@@ -875,6 +885,8 @@ export class DatabaseStorage implements IStorage {
     try {
       return await db.select().from(schema.users);
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (password column doesn't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
         const result = await pool.query(`SELECT * FROM users`);
@@ -895,6 +907,8 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(schema.users)
         .where(inArray(schema.users.id, userIds));
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (password column doesn't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("password")) {
         const userOrgs = await db.select().from(schema.userOrganizations)
@@ -1512,6 +1526,8 @@ export class DatabaseStorage implements IStorage {
         .where(eq(schema.stakeholders.projectId, projectId))
         .orderBy(desc(schema.stakeholders.createdAt));
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (created_at doesn't exist), use raw SQL
       if (error.code === "42703" || error.code === "42601" || error.message?.includes("does not exist")) {
         const result = await pool.query(
@@ -1858,6 +1874,8 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(schema.risks)
         .where(eq(schema.risks.projectId, projectId));
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (closed_date or created_at don't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist")) {
         const result = await pool.query(
@@ -2497,6 +2515,8 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(schema.resourceAssignments).values(assignment).returning();
       return created;
     } catch (error: any) {
+      // TODO: Remove fallback after schema alignment verification
+      // Run: npm run verify:schema
       // If schema mismatch (cost column doesn't exist), use raw SQL
       if (error.code === "42703" || error.message?.includes("does not exist") || error.message?.includes("cost")) {
         // resource_assignments table may only have basic columns
@@ -2876,6 +2896,37 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async getOrganizationUsage(organizationId: number): Promise<{ storageUsedBytes: number, aiTokensUsed: number, emailsSent: number }> {
+    const month = new Date().toISOString().slice(0, 7);
+    
+    const aiUsage = await this.getAiUsageSummary(organizationId, month);
+    const emailUsage = await this.getEmailUsage(organizationId, month);
+    
+    // Calculate storage usage (documents + cloud synced files)
+    // Using raw sql for sum as it's efficient
+    const [docStorage] = await db.execute(sql`
+      SELECT COALESCE(SUM(size_bytes), 0) as total
+      FROM documents
+      JOIN projects ON documents.project_id = projects.id
+      WHERE projects.organization_id = ${organizationId}
+    `);
+    
+    const [cloudStorage] = await db.execute(sql`
+      SELECT COALESCE(SUM(size_bytes), 0) as total
+      FROM cloud_synced_files
+      JOIN projects ON cloud_synced_files.project_id = projects.id
+      WHERE projects.organization_id = ${organizationId}
+    `);
+
+    const storageUsedBytes = Number(docStorage?.total || 0) + Number(cloudStorage?.total || 0);
+
+    return {
+      storageUsedBytes,
+      aiTokensUsed: aiUsage?.tokensUsed || 0,
+      emailsSent: emailUsage?.emailsSent || 0
+    };
   }
 
   // Cloud Storage Connections
@@ -4086,6 +4137,106 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Push subscription ${id} not found`);
     }
     return updated;
+  }
+
+  // ==================== Custom Dashboards (Epic 16) ====================
+  async getCustomDashboard(id: number): Promise<CustomDashboard | undefined> {
+    const [dashboard] = await db
+      .select()
+      .from(schema.customDashboards)
+      .where(eq(schema.customDashboards.id, id));
+    return dashboard;
+  }
+
+  async getCustomDashboardByUser(userId: string, projectId: number | null): Promise<CustomDashboard | undefined> {
+    const conditions: any[] = [eq(schema.customDashboards.userId, userId)];
+    
+    if (projectId === null) {
+      conditions.push(sql`${schema.customDashboards.projectId} IS NULL`);
+    } else {
+      conditions.push(eq(schema.customDashboards.projectId, projectId));
+    }
+
+    const [dashboard] = await db
+      .select()
+      .from(schema.customDashboards)
+      .where(and(...conditions))
+      .orderBy(desc(schema.customDashboards.isDefault), desc(schema.customDashboards.updatedAt))
+      .limit(1);
+    
+    return dashboard;
+  }
+
+  async getCustomDashboardsByUser(userId: string): Promise<CustomDashboard[]> {
+    return await db
+      .select()
+      .from(schema.customDashboards)
+      .where(eq(schema.customDashboards.userId, userId))
+      .orderBy(desc(schema.customDashboards.isDefault), desc(schema.customDashboards.updatedAt));
+  }
+
+  async createCustomDashboard(dashboard: InsertCustomDashboard): Promise<CustomDashboard> {
+    // If this is set as default, unset other defaults for this user/project
+    if (dashboard.isDefault) {
+      const conditions: any[] = [eq(schema.customDashboards.userId, dashboard.userId)];
+      if (dashboard.projectId === null) {
+        conditions.push(sql`${schema.customDashboards.projectId} IS NULL`);
+      } else {
+        conditions.push(eq(schema.customDashboards.projectId, dashboard.projectId));
+      }
+      
+      await db
+        .update(schema.customDashboards)
+        .set({ isDefault: false })
+        .where(and(...conditions));
+    }
+
+    const [created] = await db
+      .insert(schema.customDashboards)
+      .values({
+        ...dashboard,
+        updatedAt: new Date(),
+      })
+      .returning();
+    
+    return created;
+  }
+
+  async updateCustomDashboard(id: number, dashboard: Partial<InsertCustomDashboard>): Promise<CustomDashboard | undefined> {
+    // If setting as default, unset other defaults
+    if (dashboard.isDefault) {
+      const existing = await this.getCustomDashboard(id);
+      if (existing) {
+        const conditions: any[] = [
+          eq(schema.customDashboards.userId, existing.userId),
+          ne(schema.customDashboards.id, id),
+        ];
+        if (existing.projectId === null) {
+          conditions.push(sql`${schema.customDashboards.projectId} IS NULL`);
+        } else {
+          conditions.push(eq(schema.customDashboards.projectId, existing.projectId));
+        }
+        
+        await db
+          .update(schema.customDashboards)
+          .set({ isDefault: false })
+          .where(and(...conditions));
+      }
+    }
+
+    const [updated] = await db
+      .update(schema.customDashboards)
+      .set({ ...dashboard, updatedAt: new Date() })
+      .where(eq(schema.customDashboards.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteCustomDashboard(id: number): Promise<void> {
+    await db
+      .delete(schema.customDashboards)
+      .where(eq(schema.customDashboards.id, id));
   }
 }
 

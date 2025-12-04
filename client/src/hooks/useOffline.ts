@@ -25,13 +25,21 @@ export function useOffline(): OfflineStatus & {
   );
 
   useEffect(() => {
-    const handleOnline = () => {
+    const handleOnline = async () => {
       console.log('[Offline] Connection restored');
       setIsOnline(true);
       setWasOffline(true);
       setLastOnlineTime(Date.now());
       
       // Trigger sync when coming back online
+      try {
+        const { syncOfflineActions } = await import('@/lib/backgroundSync');
+        await syncOfflineActions();
+      } catch (error) {
+        console.error('[Offline] Failed to sync on reconnect:', error);
+      }
+      
+      // Also notify service worker
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SYNC_REQUEST',

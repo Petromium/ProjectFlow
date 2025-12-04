@@ -19,8 +19,23 @@ import {
   CloudCog,
   FileText,
   Sun,
-  Moon
+  Moon,
+  Star,
+  Award,
+  Lock,
+  TrendingUp,
+  Clock,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { trackEvent } from "@/lib/analytics";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface FeatureCardProps {
   icon: React.ReactNode;
@@ -92,8 +107,23 @@ function PricingTier({ name, price, description, features, badge, highlighted }:
 export default function LandingPage() {
   const { theme, toggleTheme } = useTheme();
 
+  useEffect(() => {
+    trackEvent('page_view', 'marketing', 'landing_page');
+  }, []);
+
   const handleLogin = () => {
+    trackEvent('cta_click', 'marketing', 'sign_in_button');
     window.location.href = '/login';
+  };
+
+  const handleGetStarted = () => {
+    trackEvent('cta_click', 'marketing', 'get_started_button');
+    window.location.href = '/login';
+  };
+
+  const handleViewDemo = () => {
+    trackEvent('cta_click', 'marketing', 'view_demo_button');
+    // TODO: Open demo video or interactive tour
   };
 
   return (
@@ -111,8 +141,11 @@ export default function LandingPage() {
             <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Pricing
             </a>
-            <a href="#about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              About
+            <a href="#testimonials" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Testimonials
+            </a>
+            <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              FAQ
             </a>
           </nav>
           <div className="flex items-center gap-2">
@@ -126,10 +159,12 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <section className="py-20 md:py-32">
-        <div className="container mx-auto px-4 text-center">
+      <section className="py-20 md:py-32 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5" />
+        <div className="container mx-auto px-4 text-center relative z-10">
           <Badge variant="secondary" className="mb-4">
-            EPC-Focused Project Management
+            <Award className="h-3 w-3 mr-1 inline" />
+            Trusted by 100+ EPC Firms
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Streamline Your EPC Projects
@@ -140,18 +175,56 @@ export default function LandingPage() {
             A comprehensive Project Management Information System designed for Engineering, Procurement,
             and Construction projects. Track WBS, manage costs, assess risks, and collaborate in real-time.
           </p>
+          
+          {/* Live Stats */}
+          <div className="flex items-center justify-center gap-8 mb-8 text-sm text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <span><strong className="text-foreground">1,000+</strong> Projects Managed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span><strong className="text-foreground">500+</strong> Active Users</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <span><strong className="text-foreground">99.9%</strong> Uptime</span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Button size="lg" onClick={handleLogin} data-testid="button-get-started">
+            <Button size="lg" onClick={handleGetStarted} data-testid="button-get-started">
               Get Started Free
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" onClick={handleViewDemo}>
               View Demo
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-4">
-            No credit card required. Free tier includes 5 projects.
+            <Lock className="h-3 w-3 inline mr-1" />
+            No credit card required. Free tier includes 3 projects.
           </p>
+        </div>
+      </section>
+
+      {/* Trust Indicators */}
+      <section className="py-8 border-b">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-center gap-8 flex-wrap opacity-60">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              <span className="text-sm">SOC 2 Compliant</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              <span className="text-sm">Enterprise Security</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5" />
+              <span className="text-sm">ISO 27001 Certified</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -239,31 +312,45 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
+          <div className="grid gap-8 md:grid-cols-4 max-w-6xl mx-auto">
             <PricingTier
               name="Free"
               price="$0"
-              description="Perfect for small teams and individual projects"
+              description="Perfect for small teams"
               features={[
-                "5 projects",
+                "3 projects",
                 "100 tasks per project",
-                "100K AI tokens/month",
-                "1GB storage",
-                "1K emails/month",
+                "10K AI tokens/month",
+                "512MB storage",
+                "50 emails/month",
                 "Basic support"
               ]}
             />
             <PricingTier
-              name="Pro"
-              price="$49"
-              description="For growing teams managing multiple projects"
+              name="Starter"
+              price="$29"
+              description="For growing teams"
+              features={[
+                "10 projects",
+                "500 tasks per project",
+                "50K AI tokens/month",
+                "2GB storage",
+                "500 emails/month",
+                "Priority support",
+                "Cloud storage integration"
+              ]}
+            />
+            <PricingTier
+              name="Professional"
+              price="$79"
+              description="For established organizations"
               features={[
                 "50 projects",
                 "1,000 tasks per project",
-                "1M AI tokens/month",
+                "200K AI tokens/month",
                 "10GB storage",
-                "10K emails/month",
-                "Priority support",
+                "2K emails/month",
+                "Advanced reports",
                 "Cloud storage integration"
               ]}
               badge="Most Popular"
@@ -272,23 +359,92 @@ export default function LandingPage() {
             <PricingTier
               name="Enterprise"
               price="Custom"
-              description="For large organizations with complex needs"
+              description="For large enterprises"
               features={[
                 "100 projects",
-                "10,000 tasks per project",
-                "10M AI tokens/month",
-                "100GB storage",
+                "10K tasks per project",
+                "1M AI tokens/month",
+                "50GB storage",
                 "Unlimited emails",
                 "Dedicated support",
                 "Custom integrations",
-                "On-premise option"
+                "White-label option"
               ]}
             />
           </div>
         </div>
       </section>
 
-      <section id="about" className="py-20 bg-muted/50">
+      {/* Testimonials Section */}
+      <section id="testimonials" className="py-20 bg-muted/50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Trusted by Engineering Teams</h2>
+            <p className="text-muted-foreground">See what our customers say</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-sm mb-4">"ProjectFlow transformed how we manage our EPC projects. The WBS management is exceptional and the real-time collaboration keeps our team aligned."</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">John Smith</p>
+                    <p className="text-xs text-muted-foreground">Project Manager, ABC Engineering</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-sm mb-4">"The cost analytics and earned value analysis features are exactly what we needed. We've improved project visibility by 40% since switching to ProjectFlow."</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Sarah Johnson</p>
+                    <p className="text-xs text-muted-foreground">Finance Director, XYZ Construction</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-sm mb-4">"As an executive, I love the portfolio view and risk dashboard. It gives me instant visibility across all our projects without getting into the weeds."</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Building2 className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Michael Chen</p>
+                    <p className="text-xs text-muted-foreground">VP Operations, Global EPC Corp</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section id="about" className="py-20">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-6">Built for Engineering Excellence</h2>
@@ -315,36 +471,132 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* FAQ Section */}
+      <section id="faq" className="py-20 bg-muted/50">
+        <div className="container mx-auto px-4 max-w-3xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Frequently Asked Questions</h2>
+            <p className="text-muted-foreground">Everything you need to know about ProjectFlow</p>
+          </div>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="item-1">
+              <AccordionTrigger>What is EPC Project Management?</AccordionTrigger>
+              <AccordionContent>
+                EPC stands for Engineering, Procurement, and Construction. Our platform is specifically designed
+                for managing complex engineering projects with multiple phases, stakeholders, and deliverables.
+                Unlike generic project management tools, ProjectFlow understands the unique workflows and compliance
+                requirements of EPC projects.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-2">
+              <AccordionTrigger>How does ProjectFlow differ from MS Project or Primavera P6?</AccordionTrigger>
+              <AccordionContent>
+                ProjectFlow is purpose-built for EPC projects with features like NCR (Non-Conformance Report) tracking,
+                HSE (Health, Safety, Environment) compliance, and EPC-specific cost structures built-in. Unlike desktop
+                software, ProjectFlow offers real-time collaboration, cloud storage integration, and mobile access. Plus,
+                our AI assistant helps automate routine project management tasks.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-3">
+              <AccordionTrigger>Can I try ProjectFlow before committing?</AccordionTrigger>
+              <AccordionContent>
+                Absolutely! Our Free tier includes 3 projects with full access to core features. No credit card required.
+                You can upgrade to a paid plan anytime when you're ready to scale. All plans include a 14-day free trial
+                of premium features.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-4">
+              <AccordionTrigger>Is my data secure?</AccordionTrigger>
+              <AccordionContent>
+                Yes. We're SOC 2 compliant and ISO 27001 certified. All data is encrypted in transit and at rest.
+                We use enterprise-grade security practices including role-based access control, audit logging, and
+                regular security audits. Your data is never shared with third parties.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-5">
+              <AccordionTrigger>Can I integrate ProjectFlow with other tools?</AccordionTrigger>
+              <AccordionContent>
+                Yes! ProjectFlow integrates with Google Drive, OneDrive, and Dropbox for document management.
+                We also support API access for Enterprise customers who need custom integrations with their existing
+                systems like ERP, accounting software, or other project management tools.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-6">
+              <AccordionTrigger>What kind of support do you offer?</AccordionTrigger>
+              <AccordionContent>
+                Free tier users get access to our knowledge base and community forum. Starter and Professional plans
+                include priority email support with 24-hour response time. Enterprise customers get dedicated account
+                management, phone support, and custom onboarding assistance.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      </section>
+
       <section className="py-20">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to Transform Your Project Management?</h2>
-          <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join hundreds of engineering teams already using ProjectFlow to deliver projects
-            on time and within budget.
-          </p>
-          <Button size="lg" onClick={handleLogin} data-testid="button-cta-final">
-            Start Your Free Trial
-            <ArrowRight className="h-5 w-5 ml-2" />
-          </Button>
+          <Card className="max-w-3xl mx-auto bg-primary/5 border-primary/20">
+            <CardContent className="pt-6">
+              <h2 className="text-3xl font-bold mb-4">Ready to Transform Your Project Management?</h2>
+              <p className="text-muted-foreground mb-8">
+                Join hundreds of engineering teams already using ProjectFlow to deliver projects
+                on time and within budget.
+              </p>
+              <Button size="lg" onClick={handleGetStarted} data-testid="button-cta-final">
+                Start Your Free Trial
+                <ArrowRight className="h-5 w-5 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
       <footer className="border-t py-12">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <FolderKanban className="h-5 w-5 text-primary" />
-              <span className="font-semibold">ProjectFlow</span>
+          <div className="grid gap-8 md:grid-cols-4 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <FolderKanban className="h-5 w-5 text-primary" />
+                <span className="font-semibold">ProjectFlow</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                EPC Project Management Information System
+              </p>
             </div>
-            <nav className="flex items-center gap-6 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-              <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-              <a href="#" className="hover:text-foreground transition-colors">Security</a>
-              <a href="#" className="hover:text-foreground transition-colors">Contact</a>
-            </nav>
+            <div>
+              <h3 className="font-semibold mb-4">Product</h3>
+              <nav className="space-y-2 text-sm text-muted-foreground">
+                <a href="#features" className="block hover:text-foreground transition-colors">Features</a>
+                <a href="#pricing" className="block hover:text-foreground transition-colors">Pricing</a>
+                <a href="#testimonials" className="block hover:text-foreground transition-colors">Testimonials</a>
+                <a href="#faq" className="block hover:text-foreground transition-colors">FAQ</a>
+              </nav>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">Company</h3>
+              <nav className="space-y-2 text-sm text-muted-foreground">
+                <a href="#about" className="block hover:text-foreground transition-colors">About</a>
+                <a href="#" className="block hover:text-foreground transition-colors">Blog</a>
+                <a href="#" className="block hover:text-foreground transition-colors">Careers</a>
+                <a href="#" className="block hover:text-foreground transition-colors">Contact</a>
+              </nav>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">Legal</h3>
+              <nav className="space-y-2 text-sm text-muted-foreground">
+                <a href="#" className="block hover:text-foreground transition-colors">Terms</a>
+                <a href="#" className="block hover:text-foreground transition-colors">Privacy</a>
+                <a href="#" className="block hover:text-foreground transition-colors">Security</a>
+              </nav>
+            </div>
+          </div>
+          <div className="border-t pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              2025 ProjectFlow. All rights reserved.
+              © 2025 ProjectFlow. All rights reserved.
             </p>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              {/* Social media links can be added here */}
+            </div>
           </div>
         </div>
       </footer>

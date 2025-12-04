@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /login
+Disallow: /settings
+Disallow: /wbs
+Disallow: /gantt
+Disallow: /kanban
+Disallow: /calendar
+Disallow: /risks
+Disallow: /issues
+Disallow: /cost
+Disallow: /documents
+Disallow: /analytics
+Disallow: /reports
+Disallow: /ai-assistant
+Disallow: /chat
+Disallow: /pmo/
+
+Sitemap: https://projectflow.com/sitemap.xml
+

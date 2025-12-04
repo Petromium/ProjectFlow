@@ -16,7 +16,18 @@ import {
   Mail,
   Brain,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  Search,
+  Globe,
+  Eye,
+  MousePointerClick,
+  BarChart,
+  Clock,
+  Target,
+  Zap,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -43,6 +54,62 @@ interface OrganizationSummary {
   projectCount: number;
   storageUsedMB: number;
   storageLimitMB: number;
+}
+
+interface MarketingStats {
+  pageViews: number;
+  uniqueVisitors: number;
+  bounceRate: number;
+  avgSessionDuration: number;
+  topPages: Array<{ path: string; views: number }>;
+  trafficSources: Array<{ source: string; count: number }>;
+  conversions: {
+    signups: number;
+    trialStarts: number;
+    paidConversions: number;
+  };
+  seoMetrics: {
+    indexedPages: number;
+    backlinks: number;
+    domainAuthority: number;
+    organicTraffic: number;
+    averagePosition?: number;
+    clickThroughRate?: number;
+    overallScore?: number;
+    recommendations?: Array<{ title: string; description: string; priority: 'low' | 'medium' | 'high' }>;
+  };
+}
+
+interface LeadScore {
+  userId: string;
+  email: string;
+  organizationId: number | null;
+  organizationName: string | null;
+  score: number;
+  tier: 'cold' | 'warm' | 'hot' | 'pql';
+  signals: {
+    projectCreated: boolean;
+    multipleProjects: boolean;
+    tasksCreated: boolean;
+    teamInvited: boolean;
+    storageUsed: boolean;
+    aiUsed: boolean;
+    frequentLogin: boolean;
+    exportUsed: boolean;
+  };
+  lastActivity: string | null;
+  createdAt: string;
+}
+
+interface SEOHealth {
+  overallScore: number;
+  indexedPages: number;
+  organicTraffic: number;
+  averagePosition: number;
+  clickThroughRate: number;
+  coverageIssues: Array<{ issue: string; count: number; severity: 'low' | 'medium' | 'high' }>;
+  recommendations: Array<{ title: string; description: string; priority: 'low' | 'medium' | 'high' }>;
+  lastChecked: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -89,6 +156,39 @@ export default function AdminDashboard() {
       const res = await fetch('/api/admin/organizations', { credentials: 'include' });
       if (res.status === 401 || res.status === 403) return [];
       if (!res.ok) throw new Error('Failed to fetch organizations');
+      return res.json();
+    }
+  });
+
+  const { data: marketingStats, isLoading: marketingLoading } = useQuery<MarketingStats>({
+    queryKey: ['/api/admin/marketing-stats'],
+    retry: 1,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/marketing-stats', { credentials: 'include' });
+      if (res.status === 401 || res.status === 403) throw new Error('Unauthorized');
+      if (!res.ok) throw new Error('Failed to fetch marketing stats');
+      return res.json();
+    }
+  });
+
+  const { data: leadScores = [], isLoading: leadScoresLoading } = useQuery<LeadScore[]>({
+    queryKey: ['/api/admin/lead-scores'],
+    retry: 1,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/lead-scores', { credentials: 'include' });
+      if (res.status === 401 || res.status === 403) return [];
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  const { data: seoHealth, isLoading: seoHealthLoading } = useQuery<SEOHealth>({
+    queryKey: ['/api/admin/seo-health'],
+    retry: 1,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/seo-health', { credentials: 'include' });
+      if (res.status === 401 || res.status === 403) return null;
+      if (!res.ok) return null;
       return res.json();
     }
   });
@@ -166,6 +266,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
           <TabsTrigger value="subscriptions" data-testid="tab-subscriptions">Subscriptions</TabsTrigger>
           <TabsTrigger value="usage" data-testid="tab-usage">Usage</TabsTrigger>
+          <TabsTrigger value="marketing" data-testid="tab-marketing">Marketing & SEO</TabsTrigger>
           <TabsTrigger value="organizations" data-testid="tab-organizations">Organizations</TabsTrigger>
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
         </TabsList>
@@ -340,6 +441,267 @@ export default function AdminDashboard() {
                     </div>
                     <div className="text-2xl font-bold font-mono">{formatNumber(stats?.emailsSent || 0)}</div>
                     <p className="text-sm text-muted-foreground">Total emails sent via notification system</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="marketing" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-4">
+            <MetricCard
+              title="Page Views"
+              value={formatNumber(marketingStats?.pageViews || 0)}
+              icon={Eye}
+            />
+            <MetricCard
+              title="Unique Visitors"
+              value={formatNumber(marketingStats?.uniqueVisitors || 0)}
+              icon={Users}
+            />
+            <MetricCard
+              title="Bounce Rate"
+              value={`${(marketingStats?.bounceRate || 0).toFixed(1)}%`}
+              icon={TrendingUp}
+            />
+            <MetricCard
+              title="Avg Session"
+              value={`${Math.floor((marketingStats?.avgSessionDuration || 0) / 60)}m`}
+              icon={Clock}
+            />
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Pages</CardTitle>
+                <CardDescription>Most visited pages</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {marketingLoading ? (
+                  <Skeleton className="h-48" />
+                ) : marketingStats?.topPages && marketingStats.topPages.length > 0 ? (
+                  <div className="space-y-2">
+                    {marketingStats.topPages.map((page, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 rounded border">
+                        <span className="text-sm font-mono">{page.path}</span>
+                        <span className="text-sm text-muted-foreground">{formatNumber(page.views)} views</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">No page data available</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Traffic Sources</CardTitle>
+                <CardDescription>Where visitors come from</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {marketingLoading ? (
+                  <Skeleton className="h-48" />
+                ) : marketingStats?.trafficSources && marketingStats.trafficSources.length > 0 ? (
+                  <div className="space-y-2">
+                    {marketingStats.trafficSources.map((source, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 rounded border">
+                        <span className="text-sm">{source.source}</span>
+                        <span className="text-sm text-muted-foreground">{formatNumber(source.count)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">No traffic source data available</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>SEO Metrics</CardTitle>
+              <CardDescription>Search engine optimization performance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {marketingLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div>
+                    <div className="text-2xl font-bold">{marketingStats?.seoMetrics?.indexedPages || 0}</div>
+                    <p className="text-sm text-muted-foreground">Indexed Pages</p>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{formatNumber(marketingStats?.seoMetrics?.backlinks || 0)}</div>
+                    <p className="text-sm text-muted-foreground">Backlinks</p>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{marketingStats?.seoMetrics?.domainAuthority || 0}</div>
+                    <p className="text-sm text-muted-foreground">Domain Authority</p>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{formatNumber(marketingStats?.seoMetrics?.organicTraffic || 0)}</div>
+                    <p className="text-sm text-muted-foreground">Organic Traffic</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {seoHealth && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>SEO Health</CardTitle>
+                    <CardDescription>Overall SEO health score and recommendations</CardDescription>
+                  </div>
+                  <Badge 
+                    variant={seoHealth.overallScore >= 70 ? 'default' : seoHealth.overallScore >= 50 ? 'secondary' : 'destructive'}
+                    className="text-lg px-3 py-1"
+                  >
+                    {seoHealth.overallScore}/100
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {seoHealthLoading ? (
+                  <Skeleton className="h-48" />
+                ) : (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <div className="text-xl font-bold">{seoHealth.averagePosition.toFixed(1)}</div>
+                        <p className="text-sm text-muted-foreground">Avg Position</p>
+                      </div>
+                      <div>
+                        <div className="text-xl font-bold">{(seoHealth.clickThroughRate * 100).toFixed(2)}%</div>
+                        <p className="text-sm text-muted-foreground">Click-Through Rate</p>
+                      </div>
+                      <div>
+                        <div className="text-xl font-bold">{seoHealth.coverageIssues.length}</div>
+                        <p className="text-sm text-muted-foreground">Coverage Issues</p>
+                      </div>
+                    </div>
+                    {seoHealth.recommendations && seoHealth.recommendations.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-sm">Recommendations</h4>
+                        {seoHealth.recommendations.slice(0, 3).map((rec, idx) => (
+                          <div key={idx} className="flex items-start gap-2 p-2 rounded border text-sm">
+                            {rec.priority === 'high' ? (
+                              <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                            ) : rec.priority === 'medium' ? (
+                              <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="font-medium">{rec.title}</div>
+                              <div className="text-muted-foreground text-xs">{rec.description}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Lead Scores</CardTitle>
+              <CardDescription>Product-Qualified Leads (PQLs) and engagement scores</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {leadScoresLoading ? (
+                <Skeleton className="h-48" />
+              ) : leadScores.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div className="text-center p-4 rounded-lg border">
+                      <div className="text-2xl font-bold text-blue-600">{leadScores.filter(s => s.tier === 'pql').length}</div>
+                      <p className="text-sm text-muted-foreground">PQLs</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg border">
+                      <div className="text-2xl font-bold text-orange-600">{leadScores.filter(s => s.tier === 'hot').length}</div>
+                      <p className="text-sm text-muted-foreground">Hot Leads</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg border">
+                      <div className="text-2xl font-bold text-yellow-600">{leadScores.filter(s => s.tier === 'warm').length}</div>
+                      <p className="text-sm text-muted-foreground">Warm Leads</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg border">
+                      <div className="text-2xl font-bold text-gray-600">{leadScores.filter(s => s.tier === 'cold').length}</div>
+                      <p className="text-sm text-muted-foreground">Cold Leads</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm">Top PQLs</h4>
+                    {leadScores.filter(s => s.tier === 'pql').slice(0, 5).map((lead) => (
+                      <div key={lead.userId} className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            lead.tier === 'pql' ? 'bg-blue-100 text-blue-600' :
+                            lead.tier === 'hot' ? 'bg-orange-100 text-orange-600' :
+                            lead.tier === 'warm' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            <Target className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{lead.email}</div>
+                            {lead.organizationName && (
+                              <div className="text-sm text-muted-foreground truncate">{lead.organizationName}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                          <div className="text-right">
+                            <div className="font-bold">{lead.score}</div>
+                            <Badge variant={lead.tier === 'pql' ? 'default' : lead.tier === 'hot' ? 'secondary' : 'outline'} className="text-xs capitalize">
+                              {lead.tier}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {leadScores.filter(s => s.tier === 'pql').length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">No PQLs found</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No lead score data available</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Conversions</CardTitle>
+              <CardDescription>Marketing funnel performance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {marketingLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <div className="text-2xl font-bold">{marketingStats?.conversions?.signups || 0}</div>
+                    <p className="text-sm text-muted-foreground">Signups</p>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{marketingStats?.conversions?.trialStarts || 0}</div>
+                    <p className="text-sm text-muted-foreground">Trial Starts</p>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{marketingStats?.conversions?.paidConversions || 0}</div>
+                    <p className="text-sm text-muted-foreground">Paid Conversions</p>
                   </div>
                 </div>
               )}

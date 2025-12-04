@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, jsonb, pgEnum, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, jsonb, pgEnum, unique, index, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -23,6 +23,7 @@ export const users = pgTable("users", {
   totpEnabled: boolean("totp_enabled").default(false),
   backupCodes: text("backup_codes"),
   lastLoginAt: timestamp("last_login_at"),
+  isSystemAdmin: boolean("is_system_admin").default(false),
 });
 
 export const organizations = pgTable("organizations", {
@@ -384,6 +385,96 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// --- New Tables for Admin Dashboard & Subscription System ---
+
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  tier: varchar("tier", { length: 50 }).notNull().unique(), // free, pro, enterprise
+  name: varchar("name", { length: 100 }).notNull(),
+  priceMonthly: integer("price_monthly"), // In cents
+  priceYearly: integer("price_yearly"), // In cents
+  currency: varchar("currency", { length: 3 }).default("USD"),
+  storageQuotaBytes: bigint("storage_quota_bytes", { mode: "number" }),
+  aiTokenLimit: integer("ai_token_limit"),
+  projectLimit: integer("project_limit"),
+  userLimit: integer("user_limit"),
+  features: jsonb("features"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const organizationSubscriptions = pgTable("organization_subscriptions", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  planId: integer("plan_id").notNull().references(() => subscriptionPlans.id),
+  status: varchar("status", { length: 50 }).default("active"), // active, cancelled, past_due
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date"),
+  autoRenew: boolean("auto_renew").default(true),
+  paymentMethodId: varchar("payment_method_id", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const aiUsageSummary = pgTable("ai_usage_summary", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  month: varchar("month", { length: 7 }).notNull(), // YYYY-MM
+  tokensUsed: integer("tokens_used").default(0).notNull(),
+  requestCount: integer("request_count").default(0).notNull(),
+  tokenLimit: integer("token_limit"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  orgMonthUnique: unique("ai_usage_org_month_unique").on(table.organizationId, table.month),
+}));
+
+export const cloudStorageConnections = pgTable("cloud_storage_connections", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 50 }).notNull(), // 'google-drive', 'dropbox', 'onedrive'
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at"),
+  syncStatus: varchar("sync_status", { length: 50 }).default("inactive"), // 'active', 'syncing', 'error', 'inactive'
+  lastSyncAt: timestamp("last_sync_at"),
+  syncError: text("sync_error"),
+  connectedBy: varchar("connected_by", { length: 100 }).references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  orgProviderUnique: unique("cloud_storage_org_provider_unique").on(table.organizationId, table.provider),
+}));
+
+export const cloudSyncedFiles = pgTable("cloud_synced_files", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  connectionId: integer("connection_id").references(() => cloudStorageConnections.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  cloudFileId: varchar("cloud_file_id", { length: 255 }).notNull(),
+  cloudFilePath: text("cloud_file_path"),
+  fileType: varchar("file_type", { length: 50 }),
+  sizeBytes: bigint("size_bytes", { mode: "number" }),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Custom Dashboard Layouts (Epic 16: Advanced Features)
+export const customDashboards = pgTable("custom_dashboards", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 100 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }), // null = global dashboard
+  name: varchar("name", { length: 100 }).notNull(),
+  layout: jsonb("layout").notNull(), // Array of widget configurations with positions
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userProjectUnique: unique("custom_dashboards_user_project_unique").on(table.userId, table.projectId),
+}));
+
 // Zod Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const insertProjectSchema = createInsertSchema(projects);
@@ -426,6 +517,14 @@ export const insertCommunicationMetricsSchema = createInsertSchema(communication
   updatedAt: true
 });
 export const updateCommunicationMetricsSchema = insertCommunicationMetricsSchema.partial();
+
+// New Schemas
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans);
+export const insertOrganizationSubscriptionSchema = createInsertSchema(organizationSubscriptions);
+export const insertAiUsageSummarySchema = createInsertSchema(aiUsageSummary);
+export const insertCloudStorageConnectionSchema = createInsertSchema(cloudStorageConnections);
+export const insertCloudSyncedFileSchema = createInsertSchema(cloudSyncedFiles);
+export const insertCustomDashboardSchema = createInsertSchema(customDashboards);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -480,3 +579,16 @@ export type InsertNotificationRule = typeof notificationRules.$inferInsert;
 // Push Subscription Types
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+// New Types
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
+export type OrganizationSubscription = typeof organizationSubscriptions.$inferSelect;
+export type InsertOrganizationSubscription = typeof organizationSubscriptions.$inferInsert;
+export type AiUsageSummary = typeof aiUsageSummary.$inferSelect;
+export type CloudStorageConnection = typeof cloudStorageConnections.$inferSelect;
+export type InsertCloudStorageConnection = typeof cloudStorageConnections.$inferInsert;
+export type CloudSyncedFile = typeof cloudSyncedFiles.$inferSelect;
+export type InsertCloudSyncedFile = typeof cloudSyncedFiles.$inferInsert;
+export type CustomDashboard = typeof customDashboards.$inferSelect;
+export type InsertCustomDashboard = typeof customDashboards.$inferInsert;

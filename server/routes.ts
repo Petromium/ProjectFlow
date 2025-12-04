@@ -9054,7 +9054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize default subscription plans (admin only - can be called once)
-  app.post('/api/admin/init-subscription-plans', isAuthenticated, async (_req, res) => {
+  app.post('/api/admin/init-subscription-plans', isAuthenticated, isAdmin, async (_req, res) => {
     try {
       const existingPlans = await storage.getSubscriptionPlans();
       if (existingPlans.length > 0) {
@@ -9063,72 +9063,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const defaultPlans = [
         {
-          tier: 'free' as const,
+          tier: 'free',
           name: 'Free',
-          description: 'Get started with basic project management features',
-          priceMonthly: '0',
-          priceYearly: '0',
-          maxProjects: 3,
-          maxTasksPerProject: 100,
-          maxUsers: 2,
+          priceMonthly: 0,
+          priceYearly: 0,
+          projectLimit: 3,
+          userLimit: 2,
+          aiTokenLimit: 10000,
           storageQuotaBytes: 536870912, // 512MB
-          aiTokensMonthly: 10000,
-          emailsMonthly: 50,
-          includesCloudSync: false,
-          includesAdvancedReports: false,
-          includesWhiteLabel: false,
-          isActive: true
+          features: {
+            description: 'Get started with basic project management features',
+            emailsMonthly: 50,
+            includesCloudSync: false,
+            includesAdvancedReports: false,
+            includesWhiteLabel: false,
+            maxTasksPerProject: 100
+          }
         },
         {
-          tier: 'starter' as const,
+          tier: 'starter',
           name: 'Starter',
-          description: 'Essential features for small teams',
-          priceMonthly: '29',
-          priceYearly: '290',
-          maxProjects: 10,
-          maxTasksPerProject: 500,
-          maxUsers: 5,
+          priceMonthly: 2900, // $29.00
+          priceYearly: 29000, // $290.00
+          projectLimit: 10,
+          userLimit: 5,
+          aiTokenLimit: 50000,
           storageQuotaBytes: 2147483648, // 2GB
-          aiTokensMonthly: 50000,
-          emailsMonthly: 500,
-          includesCloudSync: true,
-          includesAdvancedReports: false,
-          includesWhiteLabel: false,
-          isActive: true
+          features: {
+            description: 'Essential features for small teams',
+            emailsMonthly: 500,
+            includesCloudSync: true,
+            includesAdvancedReports: false,
+            includesWhiteLabel: false,
+            maxTasksPerProject: 500
+          }
         },
         {
-          tier: 'professional' as const,
+          tier: 'professional',
           name: 'Professional',
-          description: 'Advanced features for growing organizations',
-          priceMonthly: '79',
-          priceYearly: '790',
-          maxProjects: 50,
-          maxTasksPerProject: 1000,
-          maxUsers: 20,
+          priceMonthly: 7900, // $79.00
+          priceYearly: 79000, // $790.00
+          projectLimit: 50,
+          userLimit: 20,
+          aiTokenLimit: 200000,
           storageQuotaBytes: 10737418240, // 10GB
-          aiTokensMonthly: 200000,
-          emailsMonthly: 2000,
-          includesCloudSync: true,
-          includesAdvancedReports: true,
-          includesWhiteLabel: false,
-          isActive: true
+          features: {
+            description: 'Advanced features for growing organizations',
+            emailsMonthly: 2000,
+            includesCloudSync: true,
+            includesAdvancedReports: true,
+            includesWhiteLabel: false,
+            maxTasksPerProject: 1000
+          }
         },
         {
-          tier: 'enterprise' as const,
+          tier: 'enterprise',
           name: 'Enterprise',
-          description: 'Full-featured solution for large enterprises',
-          priceMonthly: '199',
-          priceYearly: '1990',
-          maxProjects: 100,
-          maxTasksPerProject: 1000,
-          maxUsers: 100,
+          priceMonthly: 19900, // $199.00
+          priceYearly: 199000, // $1990.00
+          projectLimit: 100,
+          userLimit: 100,
+          aiTokenLimit: 1000000,
           storageQuotaBytes: 53687091200, // 50GB
-          aiTokensMonthly: 1000000,
-          emailsMonthly: 10000,
-          includesCloudSync: true,
-          includesAdvancedReports: true,
-          includesWhiteLabel: true,
-          isActive: true
+          features: {
+            description: 'Full-featured solution for large enterprises',
+            emailsMonthly: 10000,
+            includesCloudSync: true,
+            includesAdvancedReports: true,
+            includesWhiteLabel: true,
+            maxTasksPerProject: 10000
+          }
         }
       ];
 
@@ -9152,14 +9156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const user = await storage.getUser(userId);
 
-      // For now, check if user is an admin of any organization (in production, use a separate admin flag)
-      const orgs = await storage.getOrganizationsByUser(userId);
-      const isOrgAdmin = orgs.some(org => {
-        // Check if user is owner/admin role
-        return true; // For MVP, any authenticated user with orgs can view admin stats
-      });
-
-      if (!isOrgAdmin) {
+      if (!user || !user.isSystemAdmin) {
         return res.status(403).json({ message: "Admin access required" });
       }
 
@@ -9205,7 +9202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Get usage stats
-          const usage = await storage.getOrganizationUsage(subscription.id);
+          const usage = await storage.getOrganizationUsage(org.id);
           if (usage) {
             totalStorage += usage.storageUsedBytes;
             totalAiTokens += usage.aiTokensUsed;
@@ -9252,7 +9249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tier = plan.tier;
           }
 
-          const usage = await storage.getOrganizationUsage(subscription.id);
+          const usage = await storage.getOrganizationUsage(org.id);
           if (usage) {
             storageUsedMB = usage.storageUsedBytes / (1024 * 1024);
           }
@@ -9273,6 +9270,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching admin organizations:", error);
       res.status(500).json({ message: "Failed to fetch organizations" });
+    }
+  });
+
+  app.get('/api/admin/marketing-stats', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      // Import services
+      const { getGA4Metrics } = await import('./services/marketingAnalytics');
+      const { getSearchConsoleMetrics } = await import('./services/searchConsole');
+      const { getSEOHealthMetrics } = await import('./services/seoHealth');
+
+      // Fetch GA4 metrics
+      const ga4Metrics = await getGA4Metrics();
+
+      // Fetch Search Console metrics
+      const searchConsoleMetrics = await getSearchConsoleMetrics();
+
+      // Fetch SEO health metrics
+      const seoHealthMetrics = await getSEOHealthMetrics();
+
+      // Calculate conversions from actual data
+      const organizations = await storage.getAllOrganizations();
+      const allUsers = await storage.getAllUsers();
+      
+      let signups = allUsers.length;
+      let trialStarts = 0;
+      let paidConversions = 0;
+
+      for (const org of organizations) {
+        const subscription = await storage.getOrganizationSubscription(org.id);
+        if (subscription) {
+          const plan = await storage.getSubscriptionPlan(subscription.planId);
+          if (plan) {
+            if (plan.tier === 'free' || plan.tier === 'trial') {
+              trialStarts++;
+            } else if (plan.tier !== 'free') {
+              paidConversions++;
+            }
+          }
+        } else {
+          trialStarts++; // No subscription = free tier
+        }
+      }
+
+      const marketingStats = {
+        pageViews: ga4Metrics.pageViews,
+        uniqueVisitors: ga4Metrics.uniqueVisitors,
+        bounceRate: ga4Metrics.bounceRate,
+        avgSessionDuration: ga4Metrics.avgSessionDuration,
+        topPages: ga4Metrics.topPages,
+        trafficSources: ga4Metrics.trafficSources,
+        conversions: {
+          signups,
+          trialStarts,
+          paidConversions,
+        },
+        seoMetrics: {
+          indexedPages: searchConsoleMetrics.indexedPages,
+          backlinks: 0, // Placeholder - requires Ahrefs/SEMrush API integration
+          domainAuthority: 0, // Placeholder - requires Moz API integration
+          organicTraffic: searchConsoleMetrics.organicTraffic,
+          averagePosition: seoHealthMetrics.averagePosition,
+          clickThroughRate: seoHealthMetrics.clickThroughRate,
+          overallScore: seoHealthMetrics.overallScore,
+          recommendations: seoHealthMetrics.recommendations,
+        },
+      };
+
+      res.json(marketingStats);
+    } catch (error) {
+      logger.error("Error fetching marketing stats:", error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ message: "Failed to fetch marketing stats" });
+    }
+  });
+
+  // Lead scoring endpoints
+  app.get('/api/admin/lead-scores', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { getAllLeadScores } = await import('./services/leadScoring');
+      const leadScores = await getAllLeadScores();
+      res.json(leadScores);
+    } catch (error) {
+      logger.error("Error fetching lead scores:", error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ message: "Failed to fetch lead scores" });
+    }
+  });
+
+  app.get('/api/admin/pqls', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { getPQLs } = await import('./services/leadScoring');
+      const pqls = await getPQLs();
+      res.json(pqls);
+    } catch (error) {
+      logger.error("Error fetching PQLs:", error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ message: "Failed to fetch PQLs" });
+    }
+  });
+
+  // SEO health endpoint
+  app.get('/api/admin/seo-health', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { getSEOHealthMetrics } = await import('./services/seoHealth');
+      const seoHealth = await getSEOHealthMetrics();
+      res.json(seoHealth);
+    } catch (error) {
+      logger.error("Error fetching SEO health:", error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ message: "Failed to fetch SEO health metrics" });
     }
   });
 
@@ -10383,6 +10486,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error fetching push subscriptions:', error);
       res.status(500).json({ message: 'Failed to fetch subscriptions' });
+    }
+  });
+
+  // ==================== Custom Dashboards (Epic 16) ====================
+  app.get('/api/dashboards', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : null;
+
+      if (projectId !== null && isNaN(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+
+      // If projectId specified, get dashboard for that project (or null for global)
+      if (projectId !== null || projectId === null) {
+        const dashboard = await storage.getCustomDashboardByUser(userId, projectId);
+        return res.json(dashboard);
+      }
+
+      // Otherwise, get all dashboards for user
+      const dashboards = await storage.getCustomDashboardsByUser(userId);
+      res.json(dashboards);
+    } catch (error: any) {
+      console.error('Error fetching dashboards:', error);
+      res.status(500).json({ message: 'Failed to fetch dashboards' });
+    }
+  });
+
+  app.post('/api/dashboards', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { projectId, name, layout, isDefault } = req.body;
+
+      if (!name || !layout) {
+        return res.status(400).json({ message: 'Name and layout are required' });
+      }
+
+      // Verify project access if projectId is provided
+      if (projectId !== null && projectId !== undefined) {
+        const projectIdNum = parseInt(projectId);
+        if (isNaN(projectIdNum)) {
+          return res.status(400).json({ message: 'Invalid projectId' });
+        }
+        if (!await checkProjectAccess(userId, projectIdNum)) {
+          return res.status(403).json({ message: 'Access denied to project' });
+        }
+      }
+
+      const dashboard = await storage.createCustomDashboard({
+        userId,
+        projectId: projectId !== null && projectId !== undefined ? parseInt(projectId) : null,
+        name,
+        layout,
+        isDefault: isDefault ?? false,
+      });
+
+      res.json(dashboard);
+    } catch (error: any) {
+      console.error('Error creating dashboard:', error);
+      res.status(500).json({ message: 'Failed to create dashboard' });
+    }
+  });
+
+  app.put('/api/dashboards/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const dashboardId = parseInt(req.params.id);
+      const { name, layout, isDefault } = req.body;
+
+      const existing = await storage.getCustomDashboard(dashboardId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Dashboard not found' });
+      }
+
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      // Verify project access if projectId is being changed
+      if (req.body.projectId !== undefined) {
+        const projectId = req.body.projectId === null ? null : parseInt(req.body.projectId);
+        if (projectId !== null && isNaN(projectId)) {
+          return res.status(400).json({ message: 'Invalid projectId' });
+        }
+        if (projectId !== null && !await checkProjectAccess(userId, projectId)) {
+          return res.status(403).json({ message: 'Access denied to project' });
+        }
+      }
+
+      const updated = await storage.updateCustomDashboard(dashboardId, {
+        name,
+        layout,
+        isDefault,
+        projectId: req.body.projectId !== undefined ? (req.body.projectId === null ? null : parseInt(req.body.projectId)) : undefined,
+      });
+
+      if (!updated) {
+        return res.status(404).json({ message: 'Dashboard not found' });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating dashboard:', error);
+      res.status(500).json({ message: 'Failed to update dashboard' });
+    }
+  });
+
+  app.delete('/api/dashboards/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const dashboardId = parseInt(req.params.id);
+
+      const existing = await storage.getCustomDashboard(dashboardId);
+      if (!existing) {
+        return res.status(404).json({ message: 'Dashboard not found' });
+      }
+
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      await storage.deleteCustomDashboard(dashboardId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting dashboard:', error);
+      res.status(500).json({ message: 'Failed to delete dashboard' });
     }
   });
 

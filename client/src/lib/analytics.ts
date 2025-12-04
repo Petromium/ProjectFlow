@@ -101,3 +101,60 @@ export const trackAIChat = (projectId: number) => {
 export const trackFileUpload = (fileType: string) => {
   trackEvent('file_uploaded', 'storage', fileType);
 };
+
+// Marketing & Conversion Tracking
+export const trackSignup = (method: string = 'email') => {
+  trackEvent('sign_up', 'conversion', method);
+  // Mark as conversion for GA4
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'sign_up', {
+      method: method
+    });
+  }
+};
+
+export const trackTrialStart = (planTier: string) => {
+  trackEvent('trial_start', 'conversion', planTier);
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'begin_checkout', {
+      currency: 'USD',
+      value: 0,
+      items: [{
+        item_name: planTier,
+        item_category: 'subscription'
+      }]
+    });
+  }
+};
+
+export const trackPurchase = (planTier: string, price: number) => {
+  trackEvent('purchase', 'conversion', planTier, price);
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'purchase', {
+      transaction_id: `purchase_${Date.now()}`,
+      value: price,
+      currency: 'USD',
+      items: [{
+        item_name: planTier,
+        item_category: 'subscription',
+        price: price
+      }]
+    });
+  }
+};
+
+export const trackCTAClick = (ctaLocation: string, ctaText: string) => {
+  trackEvent('cta_click', 'marketing', `${ctaLocation}_${ctaText}`);
+};
+
+export const trackPageView = (url: string, title?: string) => {
+  if (typeof window === 'undefined' || !window.gtag) return;
+  
+  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
+  if (!measurementId) return;
+  
+  window.gtag('config', measurementId, {
+    page_path: url,
+    page_title: title
+  });
+};

@@ -105,6 +105,9 @@ export function initializeScheduler(): void {
   
   // Schedule notification checks
   scheduleNotificationChecks();
+  
+  // Schedule SEO health checks
+  scheduleSEOHealthChecks();
 }
 
 /**
@@ -351,6 +354,35 @@ function scheduleNotificationChecks(): void {
   activeTimers.push(intervalTimer);
 
   log("[SCHEDULER] Notification rule checks scheduled (every hour)");
+}
+
+/**
+ * Schedule SEO health checks
+ * Runs weekly (every 7 days) to monitor SEO health
+ */
+function scheduleSEOHealthChecks(): void {
+  // Run immediately, then every 7 days
+  performSEOHealthCheck();
+  
+  const intervalTimer = setInterval(() => {
+    performSEOHealthCheck();
+  }, 7 * 24 * 60 * 60 * 1000); // 7 days
+  
+  activeTimers.push(intervalTimer);
+  
+  log("[SCHEDULER] SEO health checks scheduled (weekly)");
+}
+
+/**
+ * Perform SEO health check
+ */
+async function performSEOHealthCheck(): Promise<void> {
+  try {
+    const { performSEOHealthCheck } = await import('./services/seoHealth');
+    await performSEOHealthCheck();
+  } catch (error: any) {
+    log(`[SCHEDULER] SEO health check error: ${error.message}`, "error");
+  }
 }
 
 /**

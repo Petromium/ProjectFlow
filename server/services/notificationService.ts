@@ -216,9 +216,7 @@ export async function sendNotification(
     // Render email template
     const { subject, body } = await renderEmailTemplate(emailTemplate, templateContext);
 
-    // Send email to each recipient
-    // TODO: Integrate with actual email service (SendGrid/SMTP)
-    // For now, we'll just log and create notification logs
+    // Send email and push notifications to each recipient
     for (const recipient of recipients) {
       try {
         // Send email via emailService
@@ -231,6 +229,33 @@ export async function sendNotification(
           templateId: rule.emailTemplateId || undefined,
           organizationId: rule.organizationId || (context.projectId ? (await storage.getProject(context.projectId))?.organizationId || 0 : 0),
         });
+
+        // Send push notification if recipient is a user
+        if (recipient.type === 'user' && recipient.id) {
+          try {
+            const { sendPushNotification } = await import("./pushNotificationService");
+            await sendPushNotification(
+              recipient.id.toString(),
+              subject,
+              body.replace(/<[^>]*>/g, '').substring(0, 200), // Strip HTML and limit length
+              {
+                tag: `notification-${rule.id}`,
+                data: {
+                  ruleId: rule.id,
+                  projectId: context.projectId,
+                  taskId: context.taskId,
+                  riskId: context.riskId,
+                  issueId: context.issueId,
+                },
+                icon: '/favicon.png',
+                badge: '/favicon.png',
+              }
+            );
+          } catch (pushError: any) {
+            // Don't fail email if push fails
+            logger.warn(`[NOTIFICATION] Failed to send push notification to user ${recipient.id}:`, pushError);
+          }
+        }
 
         // Create notification log
         const log = await storage.createNotificationLog({

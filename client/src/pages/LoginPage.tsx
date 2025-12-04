@@ -194,7 +194,7 @@ export default function LoginPage() {
               <Building2 className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-3xl">ProjectFlow</CardTitle>
+          <CardTitle className="text-3xl">Ganttium</CardTitle>
           <CardDescription>
             EPC Project Management Information Software
           </CardDescription>

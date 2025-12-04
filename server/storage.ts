@@ -136,6 +136,8 @@ import type {
   InsertCommunicationMetrics,
   CommunicationMetrics,
   UpdateCommunicationMetrics,
+  InsertPushSubscription,
+  PushSubscription,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -197,6 +199,11 @@ export interface IStorage {
   // Users (Replit Auth compatible)
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  // Push subscriptions
+  createPushSubscription(data: InsertPushSubscription): Promise<PushSubscription>;
+  getPushSubscriptionsByUser(userId: string): Promise<PushSubscription[]>;
+  deletePushSubscription(id: number): Promise<void>;
+  updatePushSubscription(id: number, data: Partial<InsertPushSubscription>): Promise<PushSubscription>;
   getAllUsers(): Promise<User[]>;
   getUsersByOrganization(organizationId: number): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
@@ -217,6 +224,12 @@ export interface IStorage {
   getUserInvitationsByOrganization(organizationId: number): Promise<UserInvitation[]>;
   getUserInvitationByEmail(organizationId: number, email: string): Promise<UserInvitation | undefined>;
   createUserInvitation(invitation: InsertUserInvitation & { token: string }): Promise<UserInvitation>;
+
+  // Push Subscriptions
+  createPushSubscription(data: InsertPushSubscription): Promise<PushSubscription>;
+  getPushSubscriptionsByUser(userId: string): Promise<PushSubscription[]>;
+  deletePushSubscription(id: number): Promise<void>;
+  updatePushSubscription(id: number, data: Partial<InsertPushSubscription>): Promise<PushSubscription>;
   acceptUserInvitation(token: string, userId: string): Promise<UserOrganization>;
   deleteUserInvitation(id: number): Promise<void>;
 
@@ -4038,6 +4051,40 @@ export class DatabaseStorage implements IStorage {
       .set(log)
       .where(eq(schema.aiActionLogs.actionId, actionId))
       .returning();
+    return updated;
+  }
+
+  // Push Subscriptions
+  async createPushSubscription(data: InsertPushSubscription): Promise<PushSubscription> {
+    const [subscription] = await db
+      .insert(schema.pushSubscriptions)
+      .values(data)
+      .returning();
+    return subscription;
+  }
+
+  async getPushSubscriptionsByUser(userId: string): Promise<PushSubscription[]> {
+    return await db
+      .select()
+      .from(schema.pushSubscriptions)
+      .where(eq(schema.pushSubscriptions.userId, userId));
+  }
+
+  async deletePushSubscription(id: number): Promise<void> {
+    await db
+      .delete(schema.pushSubscriptions)
+      .where(eq(schema.pushSubscriptions.id, id));
+  }
+
+  async updatePushSubscription(id: number, data: Partial<InsertPushSubscription>): Promise<PushSubscription> {
+    const [updated] = await db
+      .update(schema.pushSubscriptions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.pushSubscriptions.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error(`Push subscription ${id} not found`);
+    }
     return updated;
   }
 }

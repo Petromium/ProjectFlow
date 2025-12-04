@@ -7,7 +7,7 @@
 import { Logging } from '@google-cloud/logging';
 
 let loggingClient: Logging | null = null;
-let logName = 'projectflow';
+let logName = 'ganttium';
 
 // Initialize Cloud Logging client
 export function initializeCloudLogging(): void {
@@ -17,7 +17,7 @@ export function initializeCloudLogging(): void {
   if (process.env.NODE_ENV === 'production' && projectId) {
     try {
       loggingClient = new Logging({ projectId });
-      logName = process.env.GCP_LOG_NAME || 'projectflow';
+      logName = process.env.GCP_LOG_NAME || 'ganttium';
       console.log(`[Cloud Logging] Initialized for project: ${projectId}`);
     } catch (error) {
       console.error('[Cloud Logging] Failed to initialize:', error);

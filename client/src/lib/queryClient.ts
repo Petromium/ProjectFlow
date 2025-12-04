@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { queueOfflineAction } from "./indexeddb";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -7,20 +8,69 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/**
+ * Enhanced API request with offline support
+ * Queues failed requests for sync when offline
+ */
 export async function apiRequest<T = unknown>(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+  // Check if offline
+  const isOffline = !navigator.onLine;
 
-  await throwIfResNotOk(res);
-  return res;
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: data ? { "Content-Type": "application/json" } : {},
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+    });
+
+    await throwIfResNotOk(res);
+    return res;
+  } catch (error: any) {
+    // If offline or network error, queue the action
+    if (isOffline || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+      // Only queue mutations (POST, PATCH, PUT, DELETE)
+      if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
+        try {
+          // Extract entity type from URL (e.g., /api/projects -> projects)
+          const entityType = url.split('/').filter(Boolean)[1] || 'unknown';
+          
+          await queueOfflineAction({
+            type: method === 'DELETE' ? 'DELETE' : method === 'POST' ? 'CREATE' : 'UPDATE',
+            entityType,
+            endpoint: url,
+            method: method as 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+            data: data || {},
+          });
+
+          console.log(`[API] Queued offline action: ${method} ${url}`);
+          
+          // Return a mock response to prevent errors in calling code
+          return new Response(
+            JSON.stringify({ 
+              message: 'Action queued for sync when online',
+              queued: true 
+            }),
+            {
+              status: 202, // Accepted
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        } catch (queueError) {
+          console.error('[API] Failed to queue offline action:', queueError);
+          // Re-throw original error
+          throw error;
+        }
+      }
+    }
+
+    // Re-throw error if not handled
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

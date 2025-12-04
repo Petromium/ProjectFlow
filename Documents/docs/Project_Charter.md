@@ -1,4 +1,4 @@
-# Project Charter: ProjectFlow EPC PMIS
+# Project Charter: Ganttium EPC PMIS
 
 ## Vision Statement
 A specialized **Project Management Information System (PMIS)** tailored specifically for **Engineering, Procurement, and Construction (EPC)** firms. Unlike generic task management tools, this solution handles rigorous compliance, multi-disciplinary collaboration, and complex workflows inherent in capital projects.

@@ -13,8 +13,8 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Use standard pg driver for local development
-const isDev = process.env.NODE_ENV === "development";
+// Use standard pg driver for local development and testing
+const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
 export const pool = isDev
   ? new pg.Pool({ 

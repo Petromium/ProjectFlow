@@ -14,6 +14,22 @@
 
 ---
 
+## 1. Frontend Integration
+
+* **Entry:** `client/src/main.tsx`
+
+* **Router:** Wouter library (Routes defined in `client/src/App.tsx`)
+
+* **State:** React Context API (`client/src/contexts/` - ProjectContext, AuthContext, etc.)
+
+## 2. External Services
+
+* **API:** Fetch API wrapper at `client/src/lib/queryClient.ts` (uses TanStack Query)
+
+* **Auth:** OAuth2 flow handled in `client/src/hooks/useAuth.ts` and `server/auth.ts`
+
+---
+
 ## High-Level Architecture
 
 ```

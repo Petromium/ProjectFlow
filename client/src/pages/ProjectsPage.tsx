@@ -182,7 +182,16 @@ export default function ProjectsPage() {
         cell: ({ row }) => {
           const project = row.original;
           return (
-            <div className="text-right">
+            <div className="text-right flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteProject(project)}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                title="Delete project"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -197,13 +206,6 @@ export default function ProjectsPage() {
                   <DropdownMenuItem onClick={() => handleDuplicateProject(project)}>
                     <Copy className="h-4 w-4 mr-2" />
                     Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => handleDeleteProject(project)}
-                    className="text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

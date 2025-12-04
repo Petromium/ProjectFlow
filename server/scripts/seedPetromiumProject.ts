@@ -182,9 +182,10 @@ async function main() {
     }
     const orgId = org.id;
 
-    // Step 2: Find or create Drilling & Workover Department program
-    console.log("\n📋 Step 2: Setting up Drilling & Workover Department program...");
-    const programSlug = slugify("Drilling & Workover Department");
+    // Step 2: Find or create Drilling & Workover program
+    console.log("\n📋 Step 2: Setting up Drilling & Workover program...");
+    const programName = "Drilling & Workover";
+    const programSlug = slugify(programName);
     let program: any;
     try {
       program = await storage.getProgramBySlug(orgId, programSlug);
@@ -192,11 +193,11 @@ async function main() {
         try {
           program = await storage.createProgram({
             organizationId: orgId,
-            name: "Drilling & Workover Department",
+            name: programName,
             slug: programSlug,
             description: "Department handling all drilling and workover operations",
           });
-          console.log("  ✓ Created program: Drilling & Workover Department");
+          console.log(`  ✓ Created program: ${programName}`);
         } catch (error: any) {
           // If schema mismatch, use raw SQL
           if (error.code === "42703" || error.message?.includes("does not exist") || error.code === "42601") {
@@ -207,9 +208,9 @@ async function main() {
                 INSERT INTO programs (organization_id, name, slug, description, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, NOW(), NOW())
                 RETURNING *
-              `, [orgId, "Drilling & Workover Department", programSlug, "Department handling all drilling and workover operations"]);
+              `, [orgId, programName, programSlug, "Department handling all drilling and workover operations"]);
               program = result.rows[0];
-              console.log("  ✓ Created program: Drilling & Workover Department (via raw SQL)");
+              console.log(`  ✓ Created program: ${programName} (via raw SQL)`);
             } catch (sqlError: any) {
               // If duplicate or slug doesn't exist, try without slug
               if (sqlError.code === "23505" || sqlError.message?.includes("slug") || sqlError.code === "42703") {
@@ -218,19 +219,19 @@ async function main() {
                     INSERT INTO programs (organization_id, name, description, created_at, updated_at)
                     VALUES ($1, $2, $3, NOW(), NOW())
                     RETURNING *
-                  `, [orgId, "Drilling & Workover Department", "Department handling all drilling and workover operations"]);
+                  `, [orgId, programName, "Department handling all drilling and workover operations"]);
                   program = result.rows[0];
-                  console.log("  ✓ Created program: Drilling & Workover Department (without slug)");
+                  console.log(`  ✓ Created program: ${programName} (without slug)`);
                 } catch (retryError: any) {
                   // If still duplicate, fetch existing
                   if (retryError.code === "23505") {
                     const existing = await pool.query(
                       `SELECT * FROM programs WHERE organization_id = $1 AND name = $2`,
-                      [orgId, "Drilling & Workover Department"]
+                      [orgId, programName]
                     );
                     if (existing.rows.length > 0) {
                       program = existing.rows[0];
-                      console.log("  ✓ Found existing program: Drilling & Workover Department");
+                      console.log(`  ✓ Found existing program: ${programName}`);
                     } else {
                       throw retryError;
                     }
@@ -247,7 +248,7 @@ async function main() {
           }
         }
       } else {
-        console.log("  ✓ Found existing program: Drilling & Workover Department");
+        console.log(`  ✓ Found existing program: ${programName}`);
       }
     } catch (error: any) {
       // If getProgramBySlug fails due to schema, try raw SQL lookup
@@ -256,20 +257,20 @@ async function main() {
         try {
           const result = await pool.query(
             `SELECT * FROM programs WHERE organization_id = $1 AND (slug = $2 OR name = $3) LIMIT 1`,
-            [orgId, programSlug, "Drilling & Workover Department"]
+            [orgId, programSlug, programName]
           );
           if (result.rows.length > 0) {
             program = result.rows[0];
-            console.log("  ✓ Found existing program: Drilling & Workover Department");
+            console.log(`  ✓ Found existing program: ${programName}`);
           } else {
             // Create new program (slug is required)
             const createResult = await pool.query(`
               INSERT INTO programs (organization_id, name, slug, created_at, updated_at)
               VALUES ($1, $2, $3, NOW(), NOW())
               RETURNING *
-            `, [orgId, "Drilling & Workover Department", programSlug]);
+            `, [orgId, programName, programSlug]);
             program = createResult.rows[0];
-            console.log("  ✓ Created program: Drilling & Workover Department (via raw SQL)");
+            console.log(`  ✓ Created program: ${programName} (via raw SQL)`);
           }
         } catch (sqlError: any) {
           console.error("  ❌ Failed to create/find program:", sqlError.message);
@@ -280,6 +281,34 @@ async function main() {
       }
     }
     const programId = program.id;
+
+    // Step 2.5: Delete existing projects in this organization (cleanup before repopulating)
+    console.log("\n📋 Step 2.5: Cleaning up existing projects...");
+    try {
+      const existingProjects = await storage.getProjectsByOrganization(orgId);
+      if (existingProjects.length > 0) {
+        console.log(`  ⚠️  Found ${existingProjects.length} existing project(s), deleting...`);
+        for (const existingProject of existingProjects) {
+          try {
+            await storage.deleteProject(existingProject.id);
+          } catch (error: any) {
+            console.log(`  ⚠️  Could not delete project ${existingProject.id}: ${error.message}`);
+            // Try raw SQL deletion
+            try {
+              await pool.query(`DELETE FROM projects WHERE id = $1`, [existingProject.id]);
+            } catch (sqlError: any) {
+              console.log(`  ⚠️  Raw SQL deletion also failed for project ${existingProject.id}`);
+            }
+          }
+        }
+        console.log(`  ✓ Deleted ${existingProjects.length} existing project(s)`);
+      } else {
+        console.log("  ✓ No existing projects to clean up");
+      }
+    } catch (error: any) {
+      console.log(`  ⚠️  Could not clean up existing projects: ${error.message}`);
+      console.log("  ℹ️  Continuing with project creation...");
+    }
 
     // Step 3: Read and import project JSON
     console.log("\n📋 Step 3: Importing project from Sample_Drilling.json...");
@@ -574,7 +603,7 @@ async function main() {
     console.log("\n✅ Seeding completed successfully!");
     console.log(`\n📊 Summary:`);
     console.log(`   - Organization: Petromium (ID: ${orgId})`);
-    console.log(`   - Program: Drilling & Workover Department (ID: ${programId})`);
+    console.log(`   - Program: ${programName} (ID: ${programId})`);
     console.log(`   - Project: ${project.name} (ID: ${projectId})`);
     console.log(`   - Tasks: ${sortedTasks.length}`);
     console.log(`   - Risks: ${(projectData.risks || []).length}`);

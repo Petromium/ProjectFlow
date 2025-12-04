@@ -581,7 +581,7 @@ export async function setupAuth(app: Express) {
             const user = req.user as Express.User;
 
             const secret = speakeasy.generateSecret({
-                name: `ProjectFlow (${user.email})`,
+                name: `Ganttium (${user.email})`,
                 length: 32,
             });
 

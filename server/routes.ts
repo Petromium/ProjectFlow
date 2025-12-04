@@ -716,8 +716,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = parseInt(req.params.orgId);
       const { name, slug, description, isVirtual } = req.body;
 
-      if (!name || !slug) {
-        return res.status(400).json({ message: "Name and slug are required" });
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: "Name is required" });
+      }
+
+      // Generate slug from name if not provided or empty
+      let finalSlug = slug?.trim();
+      if (!finalSlug) {
+        finalSlug = name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "");
+      }
+
+      if (!finalSlug) {
+        return res.status(400).json({ message: "Could not generate a valid slug from name" });
       }
 
       if (!await checkOrganizationAccess(userId, orgId)) {
@@ -725,23 +738,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if slug already exists for this organization
-      const existing = await storage.getProgramBySlug(orgId, slug);
+      const existing = await storage.getProgramBySlug(orgId, finalSlug);
       if (existing) {
         return res.status(400).json({ message: "A program with this slug already exists" });
       }
 
       const program = await storage.createProgram({
         organizationId: orgId,
-        name,
-        slug,
-        description: description || null,
+        name: name.trim(),
+        slug: finalSlug,
+        description: description?.trim() || null,
         isVirtual: isVirtual || false,
       });
 
       res.status(201).json(program);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating program:", error);
-      res.status(500).json({ message: "Failed to create program" });
+      // Provide more detailed error message
+      const errorMessage = error?.message || "Failed to create program";
+      res.status(500).json({ message: errorMessage });
     }
   });
 
@@ -10282,6 +10297,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error assigning contact:", error);
       res.status(500).json({ message: "Failed to assign contact to project" });
+    }
+  });
+
+  // Push Notification Endpoints
+  app.get('/api/push/vapid-public-key', isAuthenticated, async (_req, res) => {
+    try {
+      const { getVAPIDPublicKey } = await import('./services/pushNotificationService');
+      const publicKey = await getVAPIDPublicKey();
+      if (!publicKey) {
+        return res.status(503).json({ message: 'Push notifications not configured' });
+      }
+      res.json({ publicKey });
+    } catch (error: any) {
+      console.error('Error getting VAPID public key:', error);
+      res.status(500).json({ message: 'Push notifications not configured' });
+    }
+  });
+
+  app.post('/api/push/subscribe', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { endpoint, keys } = req.body;
+
+      if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+        return res.status(400).json({ message: 'Invalid subscription data' });
+      }
+
+      // Check if subscription already exists
+      const existingSubscriptions = await storage.getPushSubscriptionsByUser(userId);
+      const existing = existingSubscriptions.find(sub => sub.endpoint === endpoint);
+
+      if (existing) {
+        // Update existing subscription
+        const updated = await storage.updatePushSubscription(existing.id, {
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+          enabled: true,
+        });
+        return res.json(updated);
+      }
+
+      // Create new subscription
+      const subscription = await storage.createPushSubscription({
+        userId,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        enabled: true,
+      });
+
+      res.json(subscription);
+    } catch (error: any) {
+      console.error('Error subscribing to push notifications:', error);
+      res.status(500).json({ message: 'Failed to subscribe to push notifications' });
+    }
+  });
+
+  app.delete('/api/push/unsubscribe/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const subscriptionId = parseInt(req.params.id);
+
+      // Verify subscription belongs to user
+      const subscriptions = await storage.getPushSubscriptionsByUser(userId);
+      const subscription = subscriptions.find(sub => sub.id === subscriptionId);
+
+      if (!subscription) {
+        return res.status(404).json({ message: 'Subscription not found' });
+      }
+
+      await storage.deletePushSubscription(subscriptionId);
+      res.json({ message: 'Unsubscribed successfully' });
+    } catch (error: any) {
+      console.error('Error unsubscribing from push notifications:', error);
+      res.status(500).json({ message: 'Failed to unsubscribe' });
+    }
+  });
+
+  app.get('/api/push/subscriptions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const subscriptions = await storage.getPushSubscriptionsByUser(userId);
+      res.json(subscriptions);
+    } catch (error: any) {
+      console.error('Error fetching push subscriptions:', error);
+      res.status(500).json({ message: 'Failed to fetch subscriptions' });
     }
   });
 

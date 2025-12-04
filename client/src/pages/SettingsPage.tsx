@@ -48,6 +48,7 @@ import { NotificationRulesSection } from "@/components/NotificationRulesSection"
 import { OrganizationsSection } from "@/components/OrganizationsSection";
 import { TerminologySettings } from "@/components/settings/TerminologySettings";
 import { TagManagement } from "@/components/settings/TagManagement";
+import { PushNotificationSettings } from "@/components/PushNotificationSettings";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -2065,6 +2066,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="automation" className="space-y-4">
+          <PushNotificationSettings />
           <NotificationRulesSection />
         </TabsContent>
 

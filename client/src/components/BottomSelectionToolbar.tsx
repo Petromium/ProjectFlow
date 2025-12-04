@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSelection } from "@/contexts/SelectionContext";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useRightSidebar } from "@/contexts/RightSidebarContext";
 import { useLocation } from "wouter";
 
 interface BulkAction {
@@ -180,12 +181,24 @@ function triggerBulkAction(type: string, action: string, items: any[]) {
 export function BottomSelectionToolbar() {
   const { getCurrentSelections, selectedProjects, selectedContacts, selectedStakeholders, selectedResources, selectedPrograms, selectedIssues, selectedRisks } = useSelection();
   const { state: sidebarState, isMobile } = useSidebar();
+  const { width: rightSidebarWidth, isCollapsed: isRightCollapsed } = useRightSidebar();
   const [location] = useLocation();
   const [currentSelections, setCurrentSelections] = React.useState<{
     items: any[];
     type: string;
     clearFn: () => void;
   } | null>(null);
+  const [windowWidth, setWindowWidth] = React.useState<number>(0);
+
+  // Update window width on resize (for responsive calculations)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const updateWindowWidth = () => setWindowWidth(window.innerWidth);
+    updateWindowWidth();
+    window.addEventListener("resize", updateWindowWidth);
+    return () => window.removeEventListener("resize", updateWindowWidth);
+  }, []);
 
   // Update current selections when context changes (location or any selection state)
   React.useEffect(() => {
@@ -205,25 +218,52 @@ export function BottomSelectionToolbar() {
     triggerBulkAction(type, action, items);
   };
 
-  // Calculate left offset based on sidebar state
-  // The sidebar uses "offcanvas" collapsible mode, so when collapsed it's hidden
-  // When expanded, it takes up var(--sidebar-width)
+  // Calculate offsets based on sidebar states (matching TopBar behavior)
+  // Left sidebar: uses CSS variable --sidebar-width, transitions automatically
   const getLeftOffset = () => {
     if (isMobile) return "0";
+    // Use CSS variable like TopBar - sidebar component handles transitions
     if (sidebarState === "collapsed") return "0";
     return "var(--sidebar-width)";
   };
 
+  // Calculate right offset based on right sidebar state
+  // Right sidebar uses ResizablePanel which stores width percentage in context
+  const getRightOffset = () => {
+    if (isMobile || windowWidth < 1024) return "0"; // lg breakpoint
+    
+    // If collapsed, no offset
+    if (isRightCollapsed) return "0";
+    
+    // Calculate pixel offset from percentage
+    // ResizablePanel uses percentage of available width (after left sidebar)
+    const leftSidebarWidth = sidebarState === "collapsed" ? 0 : 256; // 16rem = 256px
+    const availableWidth = windowWidth || (typeof window !== "undefined" ? window.innerWidth : 0);
+    const rightPanelWidthPx = (rightSidebarWidth / 100) * availableWidth;
+    
+    return `${rightPanelWidthPx}px`;
+  };
+
+  const leftOffset = getLeftOffset();
+  const rightOffset = getRightOffset();
+
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50",
+        "fixed bottom-0 z-50",
         "h-14 md:h-16",
         "border-t bg-background shadow-lg",
-        "transition-all duration-200 ease-linear"
+        "transition-[left,right] duration-200 ease-linear",
+        // Match TopBar styling
+        "backdrop-blur-sm bg-background/95"
       )}
       style={{
-        left: getLeftOffset(),
+        left: leftOffset,
+        right: rightOffset,
+        // Ensure smooth transitions
+        transitionProperty: "left, right",
+        transitionDuration: "200ms",
+        transitionTimingFunction: "linear",
       }}
     >
       <div className="flex h-full items-center justify-between px-4 md:px-6">

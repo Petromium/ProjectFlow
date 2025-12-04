@@ -51,6 +51,26 @@
 
 ---
 
+## Test Strategy & Protocol
+
+### 1. Testing Pyramid
+
+* **Unit Tests:** Located in `tests/unit/`. Run via `npm test`.
+
+* **Integration Tests:** Located in `tests/e2e/`. Run via `npm run test:e2e`.
+
+### 2. Debugging Protocol
+
+* **Debug Mode:** Use the "Attach to Running Chrome" launch config on port 9222.
+
+* **AI Debugging:** The `chrome-devtools` MCP server is active.
+
+    * **Console Errors:** AI must read browser console logs via MCP before suggesting fixes.
+
+    * **Network:** AI must inspect fetch headers via MCP if API calls fail.
+
+---
+
 ## Test Commands
 
 ### Unit Tests

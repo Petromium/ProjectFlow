@@ -61,14 +61,18 @@ export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   organizationId: integer("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
+  slug: varchar("slug", { length: 100 }),
   description: text("description"),
   managerId: varchar("manager_id", { length: 100 }).references(() => users.id),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   status: varchar("status", { length: 20 }).default("active"),
+  isVirtual: boolean("is_virtual").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  orgSlugUnique: unique().on(table.organizationId, table.slug),
+}));
 
 // Helper for numeric column since Drizzle numeric is string in JS
 const numeric = (name: string) => varchar(name, { length: 50 });
@@ -368,6 +372,18 @@ export const notificationRules = pgTable("notification_rules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Push notification subscriptions for PWA
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 100 }).references(() => users.id, { onDelete: "cascade" }).notNull(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(), // Public key
+  auth: text("auth").notNull(), // Auth secret
+  enabled: boolean("enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Zod Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const insertProjectSchema = createInsertSchema(projects);
@@ -460,3 +476,7 @@ export type InsertDocument = typeof documents.$inferInsert;
 // Notification Rule Types
 export type NotificationRule = typeof notificationRules.$inferSelect;
 export type InsertNotificationRule = typeof notificationRules.$inferInsert;
+
+// Push Subscription Types
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;

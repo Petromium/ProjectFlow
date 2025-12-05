@@ -586,7 +586,7 @@ class WebSocketManager {
   private async initializeRedisSubscriptions() {
     try {
       const { getRedisSubscriber } = await import("./redis");
-      const subscriber = getRedisSubscriber();
+      const subscriber = await getRedisSubscriber();
 
       // Subscribe to all conversation channels (pattern matching)
       await subscriber.psubscribe("chat:conversation:*");

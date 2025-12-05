@@ -3,25 +3,37 @@
  * Handles PayPal subscription creation, management, and webhooks
  */
 
-import { PayPalClient, PayPalEnvironment } from "@paypal/paypal-server-sdk";
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { logger } from "./cloudLogging";
 
 const secretManager = new SecretManagerServiceClient();
 
-let paypalClient: PayPalClient | null = null;
+let paypalClient: any = null;
+let PayPalClient: any = null;
+let PayPalEnvironment: any = null;
 let paypalClientId: string | null = null;
 let paypalSecret: string | null = null;
 
 /**
  * Initialize PayPal client with credentials from Secret Manager
  */
-async function getPayPalClient(): Promise<PayPalClient> {
+async function getPayPalClient(): Promise<any> {
   if (paypalClient) {
     return paypalClient;
   }
 
   try {
+    // Dynamically import PayPal SDK (CommonJS module)
+    if (!PayPalClient || !PayPalEnvironment) {
+      const paypalSDK = await import("@paypal/paypal-server-sdk");
+      PayPalClient = paypalSDK.PayPalClient || (paypalSDK as any).default?.PayPalClient || (paypalSDK as any).default;
+      PayPalEnvironment = paypalSDK.PayPalEnvironment || (paypalSDK as any).default?.PayPalEnvironment;
+      
+      if (!PayPalClient || !PayPalEnvironment) {
+        throw new Error("Failed to load PayPal SDK");
+      }
+    }
+
     // Get credentials from Secret Manager
     if (!paypalClientId) {
       const [clientIdVersion] = await secretManager.accessSecretVersion({

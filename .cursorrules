@@ -83,6 +83,11 @@ curl http://localhost:8080/api/health
 docker-compose logs app | grep -i error
 docker-compose logs app | grep -i "exit(1)"
 docker-compose logs app | grep -i "invalid"
+
+# Test API endpoints with authentication (PowerShell)
+$token = gcloud auth print-identity-token
+curl.exe -X GET "https://ganttium-303401483984.us-central1.run.app/api/health" -H "Authorization: bearer $token"
+curl.exe -X POST "https://ganttium-303401483984.us-central1.run.app/api/organizations" -H "Authorization: bearer $token" -H "Content-Type: application/json" -d '{\"name\": \"Test\"}'
 ```
 
 ## Failure Indicators (DO NOT COMMIT IF THESE OCCUR)

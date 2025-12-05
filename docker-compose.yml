@@ -38,7 +38,7 @@ services:
       - "5000:5000"
     environment:
       - NODE_ENV=production
-      - PORT=5000
+      - PORT=5000  # Local dev uses 5000, Cloud Run will use 8080
       - DATABASE_URL=postgresql://postgres:password@db:5432/projectflow
       - REDIS_URL=redis://redis:6379
       - SESSION_SECRET=local-dev-secret-key-for-docker-compose-testing-123456789012345678901234567890

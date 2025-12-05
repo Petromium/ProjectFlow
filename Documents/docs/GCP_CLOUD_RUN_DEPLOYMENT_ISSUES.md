@@ -25,14 +25,16 @@ GCP Cloud Build successfully built the container, but Cloud Run deployment faile
 
 **Fix**: Updated validation to mark SESSION_SECRET as required.
 
-### 3. Cloud Run Port Configuration
-**Problem**: Cloud Run sets `PORT` environment variable automatically (usually 8080), but our app defaults to 5000.
+### 3. Cloud Run Port Configuration ✅ FIXED
+**Problem**: Cloud Run sets `PORT` environment variable automatically (usually 8080), but our app was defaulting to 5000.
 
-**Fix**: Already handled - app reads `process.env.PORT` and defaults to 5000.
+**Fix**: 
+- Updated `server/app.ts` to default to `8080` instead of `5000`
+- Updated Dockerfile to `EXPOSE 8080` and removed hardcoded `PORT=5000`
+- Health check now uses `process.env.PORT` dynamically
+- Local docker-compose still uses PORT=5000 for development
 
-**Action Required**: In Cloud Run service configuration, ensure:
-- Container port is set to **5000** (or update Dockerfile to use Cloud Run's PORT)
-- Or set `PORT=5000` environment variable
+**Action Required**: None - Cloud Run will automatically set PORT=8080
 
 ### 4. Database Connection
 **Problem**: Cloud Run needs to connect to Cloud SQL or external database.

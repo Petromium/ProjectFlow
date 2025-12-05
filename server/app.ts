@@ -169,10 +169,9 @@ export default async function runApp(
   });
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  // Cloud Run uses PORT=8080 by default, but we support any port via env var
+  // Default to 8080 for Cloud Run compatibility, fallback to 5000 for local dev
+  const port = parseInt(process.env.PORT || '8080', 10);
   server.listen({
     port,
     host: "0.0.0.0",

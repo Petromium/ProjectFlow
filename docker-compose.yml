@@ -35,14 +35,14 @@ services:
     image: projectflow:latest
     container_name: projectflow-app
     ports:
-      - "5000:5000"
+      - "8080:8080"
     environment:
       - NODE_ENV=production
-      - PORT=5000  # Local dev uses 5000, Cloud Run will use 8080
+      - PORT=8080  # Matches Cloud Run default port for consistency
       - DATABASE_URL=postgresql://postgres:password@db:5432/projectflow
       - REDIS_URL=redis://redis:6379
       - SESSION_SECRET=local-dev-secret-key-for-docker-compose-testing-123456789012345678901234567890
-      - ALLOWED_ORIGINS=http://localhost:5000,http://localhost:3000
+      - ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
     depends_on:
       db:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "const port = process.env.PORT || '8080'; require('http').get(`http://localhost:${port}/health`, (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3

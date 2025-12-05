@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +13,29 @@ import { useAuth } from "@/hooks/useAuth";
 export default function BugReportsStatusPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [match, params] = useRoute("/bug-reports/:id");
+  const reportId = params?.id ? parseInt(params.id, 10) : null;
 
-  const { data: reports = [], isLoading } = useQuery({
-    queryKey: ["/api/bug-reports"],
+  // Fetch all reports or a specific report
+  const { data: reports = [], isLoading, error } = useQuery({
+    queryKey: reportId ? ["/api/bug-reports", reportId] : ["/api/bug-reports"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/bug-reports");
-      return response.json();
+      if (reportId) {
+        // Fetch specific report
+        const response = await apiRequest("GET", `/api/bug-reports/${reportId}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("Report not found");
+          }
+          throw new Error("Failed to load report");
+        }
+        const report = await response.json();
+        return [report]; // Return as array for consistent rendering
+      } else {
+        // Fetch all reports
+        const response = await apiRequest("GET", "/api/bug-reports");
+        return response.json();
+      }
     },
     enabled: !!user,
   });
@@ -84,20 +101,54 @@ export default function BugReportsStatusPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Error Loading Report</h3>
+                <p className="text-muted-foreground mb-4">
+                  {error instanceof Error ? error.message : "An error occurred while loading the report."}
+                </p>
+                <Button onClick={() => setLocation("/bug-reports")}>
+                  View All Reports
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 py-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold mb-2">My Bug Reports</h1>
+            <h1 className="text-4xl font-bold mb-2">
+              {reportId ? `Bug Report #${reportId}` : "My Bug Reports"}
+            </h1>
             <p className="text-muted-foreground">
-              Track the status of your submitted reports and feedback
+              {reportId 
+                ? "View details of your submitted report"
+                : "Track the status of your submitted reports and feedback"}
             </p>
           </div>
-          <Button onClick={() => setLocation("/bug-report")}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Report
-          </Button>
+          <div className="flex gap-2">
+            {reportId && (
+              <Button variant="outline" onClick={() => setLocation("/bug-reports")}>
+                Back to All Reports
+              </Button>
+            )}
+            <Button onClick={() => setLocation("/bug-report")}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Report
+            </Button>
+          </div>
         </div>
 
         {reports.length === 0 ? (

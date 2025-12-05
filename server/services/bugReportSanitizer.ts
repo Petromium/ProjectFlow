@@ -40,20 +40,31 @@ const PROFANITY_PATTERNS = [
 
 /**
  * Sanitize HTML and remove potentially dangerous content
+ * IMPORTANT: Unescape HTML entities FIRST, then remove tags.
+ * This prevents encoded tags like &lt;script&gt; from surviving tag removal
+ * and then being unescaped back into dangerous content.
  */
 function sanitizeHtml(text: string): string {
-  // Remove HTML tags but preserve line breaks
+  // Step 1: First unescape HTML entities (in case input was pre-encoded)
+  // This ensures encoded tags are decoded before we remove them
   let sanitized = text
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-    .replace(/<[^>]+>/g, '') // Remove all HTML tags
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/');
 
-  // Normalize whitespace
+  // Step 2: Remove HTML tags AFTER unescaping
+  // This ensures encoded tags like &lt;script&gt; are properly removed
+  sanitized = sanitized
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '') // Remove iframe tags
+    .replace(/<[^>]+>/g, ''); // Remove all remaining HTML tags
+
+  // Step 3: Normalize whitespace
   sanitized = sanitized.replace(/\s+/g, ' ').trim();
   
   return sanitized;

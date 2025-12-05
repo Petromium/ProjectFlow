@@ -38,6 +38,7 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
+      - DOCKER_ENV=true # Triggers pg driver instead of neon-serverless
       - PORT=8080  # Matches Cloud Run default port for consistency
       - DATABASE_URL=postgresql://postgres:password@db:5432/projectflow
       - REDIS_URL=redis://redis:6379

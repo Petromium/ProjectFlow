@@ -26,6 +26,34 @@ Added missing import: `import { useChat } from "@/hooks/useChat";`
 
 ---
 
+### Issue #010: Production Login Failure (Google OAuth)
+**Status:** ✅ RESOLVED  
+**Priority:** Critical  
+**Category:** Authentication  
+**Reported:** 2025-01-04  
+**Resolved:** 2025-01-05
+
+**Description:**  
+User unable to log in via Google OAuth in production environment. Logs showed `TokenError: Unauthorized` and HTTP 500 errors during callback. Initial attempts to rotate secrets failed due to secret corruption.
+
+**Root Cause:**  
+1. **Secret Corruption:** Updating the `GOOGLE_CLIENT_SECRET` using PowerShell `echo -n` inadvertently appended a hidden newline character, invalidating the credential.
+2. **Silent Failures:** Frontend displayed generic errors, masking the specific `TokenError`.
+
+**Resolution:**  
+1. **Fixed Secret:** Re-uploaded the secret using a file-based approach in PowerShell to guarantee no hidden characters were appended.
+2. **Improved Error Handling:** Updated `server/auth.ts` to catch specific OAuth errors (`TokenError`) and provide granular error details in the redirect URL (`?error=google&details=token_error`) for better debugging, while maintaining user-friendly frontend messages.
+
+**Files Affected:**
+- Google Secret Manager (`GOOGLE_CLIENT_SECRET`)
+- `server/auth.ts`
+
+**Prevention:**
+- Always use file-based secret updates in PowerShell (`[System.IO.File]::WriteAllText`) or use the GCP Console UI. Avoid piping `echo` output for secrets.
+- Enhanced logging in authentication flow to capture specific provider errors.
+
+---
+
 ## High Priority Bugs 🟠
 
 ### Issue #002: Top Bar Actions Not Working
@@ -345,7 +373,7 @@ Implement draggable widget library and custom dashboard builder.
 ---
 
 ### TD-005: Change Requests Route Placeholder
-**Status:** ⚠️ PARTIALLY RESOLVED  
+**Status:** ✅ PARTIALLY RESOLVED  
 **Priority:** Medium  
 **Category:** Feature Gap
 
@@ -526,6 +554,6 @@ Implement draggable widget library using `@dnd-kit/core` or `react-grid-layout`.
 ```
 
 ---
-**Last Updated:** 2025-01-04 (Afternoon)  
+**Last Updated:** 2025-01-05  
 **Maintainer:** Technical Lead  
 **Review Frequency:** Weekly during active development

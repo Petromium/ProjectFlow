@@ -507,14 +507,36 @@ export async function setupAuth(app: Express) {
         app.get("/api/auth/google", passport.authenticate("google"));
 
         app.get("/api/auth/google/callback",
-            passport.authenticate("google", { failureRedirect: "/login?error=google" }),
-            (req: Request, res: Response) => {
-                const user = req.user as Express.User;
-                if (user?.pendingTotpVerification) {
-                    res.redirect("/login?require2fa=true");
-                } else {
-                    res.redirect("/");
-                }
+            (req, res, next) => {
+                passport.authenticate("google", (err: any, user: Express.User, info: any) => {
+                    if (err) {
+                        logger.error("[AUTH] Google OAuth Error:", err);
+                        // Check for specific OAuth errors
+                        if (err.name === 'TokenError') {
+                            // Return generic error for frontend but include details in URL for debugging
+                            return res.redirect("/login?error=google&details=token_error");
+                        }
+                        return res.redirect("/login?error=google");
+                    }
+                    
+                    if (!user) {
+                        logger.warn("[AUTH] Google OAuth failed: No user returned", info);
+                        return res.redirect("/login?error=google&details=no_user");
+                    }
+
+                    req.logIn(user, (loginErr) => {
+                        if (loginErr) {
+                            logger.error("[AUTH] Login error after Google OAuth", loginErr);
+                            return res.redirect("/login?error=login_failed");
+                        }
+
+                        if (user?.pendingTotpVerification) {
+                            res.redirect("/login?require2fa=true");
+                        } else {
+                            res.redirect("/");
+                        }
+                    });
+                })(req, res, next);
             }
         );
     }
